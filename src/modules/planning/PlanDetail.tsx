@@ -1,18 +1,18 @@
-import type { MarketingPlan, Workflow } from "../../types";
+import type { MarketingPlan } from "../../types";
 import { groupSteps } from "./workflowLayout";
 import { ArrowLeftIcon, LockIcon, PlayIcon } from "../../components/Icons";
 
 interface PlanDetailProps {
   plan: MarketingPlan;
-  workflow: Workflow;
+  executing: boolean;
   onBack: () => void;
   onExecute: () => void;
 }
 
 /** Detailed pre-execution view: strategy composition + full workflow preview. */
-export default function PlanDetail({ plan, workflow, onBack, onExecute }: PlanDetailProps) {
-  const rows = groupSteps(workflow.steps);
-  const approvals = workflow.steps.filter((s) => s.requiresApproval).length;
+export default function PlanDetail({ plan, executing, onBack, onExecute }: PlanDetailProps) {
+  const rows = groupSteps(plan.steps);
+  const approvals = plan.steps.filter((s) => s.requiresApproval).length;
 
   return (
     <div className="mx-auto max-w-3xl animate-fade-up px-4 py-10 sm:px-8">
@@ -83,7 +83,7 @@ export default function PlanDetail({ plan, workflow, onBack, onExecute }: PlanDe
                       {step.requiresApproval ? (
                         <LockIcon className="h-3.5 w-3.5" />
                       ) : (
-                        workflow.steps.indexOf(step) + 1
+                        plan.steps.indexOf(step) + 1
                       )}
                     </span>
                     <div>
@@ -113,10 +113,11 @@ export default function PlanDetail({ plan, workflow, onBack, onExecute }: PlanDe
           </p>
           <button
             onClick={onExecute}
-            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition-all hover:brightness-110"
+            disabled={executing}
+            className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition-all hover:brightness-110 disabled:opacity-60"
           >
             <PlayIcon className="h-4 w-4" />
-            Execute Plan
+            {executing ? "Starting execution…" : "Execute Plan"}
           </button>
         </div>
       </div>

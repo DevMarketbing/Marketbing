@@ -1,29 +1,79 @@
-import { useEffect, useState } from "react";
-import type { MarketingPlan, ObjectiveKind, StepStatus, Workflow, WorkflowStep } from "../../types";
-import { useExecution } from "../../lib/useExecution";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MarketingPlan, ObjectiveKind, RunState, StepStatus, WorkflowStep } from "../../types";
+import { api } from "../../api";
 import { groupSteps } from "./workflowLayout";
-import { demoInfluencers } from "../../data/demo";
-import {
-  AlertIcon,
-  CheckIcon,
-  ClockIcon,
-  SparkIcon,
-} from "../../components/Icons";
+import { poLines } from "../../data/demo";
+import { AlertIcon, CheckIcon, ClockIcon, SparkIcon } from "../../components/Icons";
 
 interface ExecutionViewProps {
+  runId: string;
   plan: MarketingPlan;
-  workflow: Workflow;
   kind: ObjectiveKind;
   onRestart: () => void;
 }
 
-export default function ExecutionView({ plan, workflow, kind, onRestart }: ExecutionViewProps) {
-  const { statuses, status, approve, reject, reconsider } = useExecution(workflow.steps, true);
-  const rows = groupSteps(workflow.steps);
-  const progressPct = Math.round((status.completed / status.total) * 100);
+/** Polls the API for run state; approvals round-trip through the server. */
+function useRunState(runId: string) {
+  const [state, setState] = useState<RunState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const doneRef = useRef(false);
 
-  const awaitingStep = workflow.steps.find((s) => statuses[s.id] === "awaiting_approval");
-  const rejectedStep = workflow.steps.find((s) => statuses[s.id] === "rejected");
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      if (doneRef.current) return;
+      try {
+        const s = await api.getRun(runId);
+        if (cancelled) return;
+        setState(s);
+        setError(null);
+        if (s.done) doneRef.current = true;
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 800);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [runId]);
+
+  const decide = useCallback(
+    async (stepId: string, action: "approve" | "reject" | "reopen") => {
+      try {
+        const s = await api.decideApproval(runId, stepId, action);
+        setState(s);
+        if (s.done) doneRef.current = true;
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    },
+    [runId],
+  );
+
+  return { state, error, decide };
+}
+
+export default function ExecutionView({ runId, plan, kind, onRestart }: ExecutionViewProps) {
+  const { state, error, decide } = useRunState(runId);
+
+  if (!state) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+      </div>
+    );
+  }
+
+  const { statuses } = state;
+  const steps = state.run.steps;
+  const rows = groupSteps(steps);
+  const progressPct = Math.round((state.completed / state.total) * 100);
+  const awaitingStep = steps.find((s) => s.id === state.awaitingStepId) ?? null;
+  const rejectedStep = steps.find((s) => s.id === state.rejectedStepId) ?? null;
+  const currentStep = steps.find((s) => s.id === state.currentStepId) ?? null;
 
   return (
     <div className="mx-auto max-w-3xl animate-fade-up px-4 py-10 sm:px-8">
@@ -31,7 +81,7 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            {status.done ? (
+            {state.done ? (
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 animate-pop-in">
                 <CheckIcon className="h-4 w-4" />
               </span>
@@ -50,7 +100,7 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
               </span>
             )}
             <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              {status.done
+              {state.done
                 ? "Execution completed"
                 : rejectedStep
                   ? "Execution halted"
@@ -60,9 +110,9 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
             </h1>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {plan.name} · {status.completed} of {status.total} steps completed
-            {status.currentStep && !status.done && (
-              <span className="text-slate-400"> · current: {status.currentStep.title}</span>
+            {state.run.planName} · {state.completed} of {state.total} steps completed
+            {currentStep && !state.done && (
+              <span className="text-slate-400"> · current: {currentStep.title}</span>
             )}
           </p>
         </div>
@@ -77,7 +127,7 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
       <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200">
         <div
           className={`h-full rounded-full transition-all duration-700 ${
-            status.done
+            state.done
               ? "bg-gradient-to-r from-emerald-500 to-teal-500"
               : "bg-gradient-to-r from-indigo-500 to-violet-500 progress-active"
           }`}
@@ -85,9 +135,14 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
         />
       </div>
 
+      {error && (
+        <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
+
       <ExecutionStats statuses={statuses} kind={kind} plan={plan} />
 
-      {/* Paused / halted banners */}
       {awaitingStep && (
         <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 animate-fade-up">
           <AlertIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
@@ -108,7 +163,7 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
               request to review it again.
             </div>
             <button
-              onClick={() => reconsider(rejectedStep.id)}
+              onClick={() => decide(rejectedStep.id, "reopen")}
               className="shrink-0 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
             >
               Review again
@@ -121,13 +176,7 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
       <div className="mt-8">
         {rows.map((row, ri) => (
           <div key={ri}>
-            {ri > 0 && (
-              <Connector
-                active={row.some(
-                  (s) => statuses[s.id] !== "pending",
-                )}
-              />
-            )}
+            {ri > 0 && <Connector active={row.some((s) => statuses[s.id] !== "pending")} />}
             {row.length > 1 ? (
               <div className="relative">
                 <div className="absolute -left-1 top-3 hidden text-[9px] font-bold uppercase tracking-widest text-slate-300 sm:block sm:-rotate-90 sm:-translate-x-8">
@@ -147,8 +196,8 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
                     step={row[0]}
                     plan={plan}
                     kind={kind}
-                    onApprove={() => approve(row[0].id)}
-                    onReject={() => reject(row[0].id)}
+                    onApprove={() => decide(row[0].id, "approve")}
+                    onReject={() => decide(row[0].id, "reject")}
                   />
                 )}
               </div>
@@ -157,8 +206,7 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
         ))}
       </div>
 
-      {/* Completion */}
-      {status.done && (
+      {state.done && (
         <div className="mt-10 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 p-6 text-white shadow-xl shadow-emerald-500/20 animate-fade-up sm:p-8">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
@@ -167,7 +215,8 @@ export default function ExecutionView({ plan, workflow, kind, onRestart }: Execu
             <div>
               <div className="text-lg font-bold">Execution completed</div>
               <div className="text-sm text-emerald-100">
-                All workflow steps finished. Performance tracking continues in the background.
+                All workflow steps finished. Campaign performance now tracks in the Influencer
+                Marketplace.
               </div>
             </div>
           </div>
@@ -221,11 +270,7 @@ function StepCard({
     >
       <StatusBadge status={status} />
       <div className="min-w-0 flex-1">
-        <div
-          className={`text-sm font-semibold ${
-            status === "pending" ? "text-slate-400" : "text-slate-800"
-          }`}
-        >
+        <div className={`text-sm font-semibold ${status === "pending" ? "text-slate-400" : "text-slate-800"}`}>
           {step.title}
         </div>
         {!compact || status !== "pending" ? (
@@ -283,9 +328,7 @@ function StatusBadge({ status }: { status: StepStatus }) {
         </span>
       );
     default:
-      return (
-        <span className="mt-0.5 h-6 w-6 shrink-0 rounded-full border-2 border-slate-300 bg-white" />
-      );
+      return <span className="mt-0.5 h-6 w-6 shrink-0 rounded-full border-2 border-slate-300 bg-white" />;
   }
 }
 
@@ -306,7 +349,7 @@ function ApprovalCard({
 }) {
   const isPO = step.id === "po_approval";
   const isSend = step.id === "send_approval";
-  const poTotal = demoInfluencers.reduce((sum, i) => sum + i.poAmountLakh, 0);
+  const poTotal = poLines.reduce((sum, i) => sum + i.poAmountLakh, 0);
 
   return (
     <div className="ml-0 mt-3 overflow-hidden rounded-2xl border-2 border-amber-300 bg-white shadow-xl shadow-amber-500/10 animate-fade-up sm:ml-9">
@@ -345,7 +388,7 @@ function ApprovalCard({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {demoInfluencers.map((inf) => (
+                  {poLines.map((inf) => (
                     <tr key={inf.id}>
                       <td className="py-2.5 pr-3">
                         <div className="font-semibold text-slate-800">{inf.name}</div>
@@ -375,28 +418,20 @@ function ApprovalCard({
               </table>
             </div>
             <p className="mt-3 text-xs text-slate-400">
-              Demo purchase orders — no real commitments are created in this prototype.
+              Approved influencers appear in your Influencer Marketplace portfolio.
             </p>
           </>
         ) : isSend ? (
           <div className="grid gap-3 sm:grid-cols-3">
             <ApprovalFact label="Recipients" value="96,400" note="3 segments" />
             <ApprovalFact label="Offer" value="15% off" note="30-day window" />
-            <ApprovalFact label="Est. margin impact" value="₹2.1L" note="demo value" />
+            <ApprovalFact label="Est. margin impact" value="₹2.1L" note="projected" />
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-3">
             <ApprovalFact label="Confirmed creators" value="4" note="content scheduled" />
-            <ApprovalFact
-              label="Committed budget"
-              value={`₹${plan.metrics.budgetLakh}L`}
-              note="within approved plan"
-            />
-            <ApprovalFact
-              label="Channels"
-              value={kind === "email" ? "Email" : "IG + Meta"}
-              note="go live on approval"
-            />
+            <ApprovalFact label="Committed budget" value={`₹${plan.metrics.budgetLakh}L`} note="within approved plan" />
+            <ApprovalFact label="Channels" value={kind === "email" ? "Email" : "IG + Meta"} note="go live on approval" />
           </div>
         )}
       </div>
@@ -422,9 +457,7 @@ function ApprovalCard({
 function ApprovalFact({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <div className="rounded-lg bg-slate-50 p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-        {label}
-      </div>
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</div>
       <div className="mt-0.5 text-lg font-bold text-slate-900">{value}</div>
       <div className="text-[11px] text-slate-400">{note}</div>
     </div>
@@ -442,7 +475,6 @@ function ExecutionStats({
   kind: ObjectiveKind;
   plan: MarketingPlan;
 }) {
-  // Responses trickle in while the "responses" step runs.
   const [responses, setResponses] = useState(0);
   const responsesRunning = statuses["responses"] === "in_progress";
   const responsesDone = statuses["responses"] === "completed";

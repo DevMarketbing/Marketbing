@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
-import { planningPhases } from "../../lib/planner";
 import { CheckIcon, SparkIcon } from "../../components/Icons";
+
+const planningPhases = [
+  "Understanding your objective...",
+  "Analyzing your audience...",
+  "Evaluating marketing strategies...",
+  "Building your execution workflow...",
+  "Preparing execution options...",
+];
 
 const PHASE_MS = 1050;
 

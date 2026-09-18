@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import type { BusinessContext, ContextField, ObjectiveKind } from "../../types";
-import { getConditionalNote } from "../../lib/planner";
-import { historicalSpend } from "../../data/demo";
+import type { BusinessContext, ContextField } from "../../types";
+import { historicalSpend } from "../../../shared/planner";
 import { ArrowLeftIcon, ArrowRightIcon, SparkIcon } from "../../components/Icons";
 
 interface ContextFormProps {
   objective: string;
-  kind: ObjectiveKind;
+  note: string;
   fields: ContextField[];
   onBack: () => void;
   onSubmit: (context: BusinessContext) => void;
@@ -17,7 +16,7 @@ interface ContextFormProps {
  * planner decided are relevant to this objective. Prefilled with demo data
  * so the flow can be walked end-to-end quickly.
  */
-export default function ContextForm({ objective, kind, fields, onBack, onSubmit }: ContextFormProps) {
+export default function ContextForm({ objective, note, fields, onBack, onSubmit }: ContextFormProps) {
   const [values, setValues] = useState<BusinessContext>(() =>
     Object.fromEntries(fields.map((f) => [f.id, f.prefill])),
   );
@@ -52,7 +51,7 @@ export default function ContextForm({ objective, kind, fields, onBack, onSubmit 
         <SparkIcon className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
         <p className="text-[13px] leading-relaxed text-indigo-900">
           <span className="font-semibold">Only what&apos;s relevant: </span>
-          {getConditionalNote(kind)}
+          {note}
         </p>
       </div>
 

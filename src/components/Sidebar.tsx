@@ -34,7 +34,7 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { route: "dashboard", label: "Dashboard", icon: DashboardIcon },
   { route: "planning", label: "Automatic Planning & Execution", icon: WorkflowIcon },
-  { route: "influencers", label: "Influencer Marketplace", icon: UsersIcon, comingSoon: true },
+  { route: "influencers", label: "Influencer Marketplace", icon: UsersIcon },
   { route: "finance", label: "Finance, Sales & Products", icon: WalletIcon, comingSoon: true },
 ];
 

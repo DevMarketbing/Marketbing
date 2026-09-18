@@ -1,16 +1,15 @@
-import type { MarketingPlan, ObjectiveKind } from "../../types";
-import { buildStrategies, buildStrategySummary } from "../../lib/planner";
+import type { MarketingPlan, MarketingStrategy } from "../../types";
 import { ArrowLeftIcon, CheckIcon, SparkIcon } from "../../components/Icons";
 
 interface PlansViewProps {
-  kind: ObjectiveKind;
+  summary: string;
+  strategies: MarketingStrategy[];
   plans: MarketingPlan[];
   onSelect: (plan: MarketingPlan) => void;
   onBack: () => void;
 }
 
-export default function PlansView({ kind, plans, onSelect, onBack }: PlansViewProps) {
-  const strategies = buildStrategies(kind);
+export default function PlansView({ summary, strategies, plans, onSelect, onBack }: PlansViewProps) {
   const maxBudget = Math.max(...plans.map((p) => p.metrics.budgetLakh));
   const maxCoverage = Math.max(...plans.map((p) => p.metrics.coverageM));
 
@@ -31,7 +30,7 @@ export default function PlansView({ kind, plans, onSelect, onBack }: PlansViewPr
             Recommended Marketing Strategy
           </div>
           <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-slate-200">
-            {buildStrategySummary(kind)}
+            {summary}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             {strategies.map((s) => (

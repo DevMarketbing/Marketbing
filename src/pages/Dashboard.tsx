@@ -48,8 +48,8 @@ export default function Dashboard({ onNavigate }: { onNavigate: (r: Route) => vo
         <ModuleCard
           icon={<UsersIcon className="h-5 w-5" />}
           title="Influencer Marketplace"
-          body="View associated influencers, their statistics, and allocate budget and resources."
-          status="soon"
+          body="Track influencers like positions — ROI, ratings, tasks, payments and alerts — and invest or divest."
+          status="active"
           onClick={() => onNavigate("influencers")}
         />
         <ModuleCard

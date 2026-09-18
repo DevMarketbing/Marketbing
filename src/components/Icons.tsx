@@ -146,3 +146,58 @@ export const LockIcon = ({ className }: IconProps) => (
     <path d="M8 11V8a4 4 0 018 0v3" />
   </svg>
 );
+
+export const StarIcon = ({ className }: IconProps) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={base(className)}>
+    <path d="M12 2.6l2.8 5.8 6.4.9-4.6 4.4 1.1 6.3L12 17l-5.7 3 1.1-6.3L2.8 9.3l6.4-.9L12 2.6z" />
+  </svg>
+);
+
+export const TrendUpIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)} strokeWidth={2}>
+    <path d="M3.5 17l5.5-5.5 3.5 3.5 7.5-7.5" />
+    <path d="M14.5 7.5H20V13" />
+  </svg>
+);
+
+export const TrendDownIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)} strokeWidth={2}>
+    <path d="M3.5 7l5.5 5.5 3.5-3.5 7.5 7.5" />
+    <path d="M14.5 16.5H20V11" />
+  </svg>
+);
+
+export const SearchIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M15.8 15.8L21 21" />
+  </svg>
+);
+
+export const ChevronDownIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)} strokeWidth={2}>
+    <path d="M6 9.5l6 6 6-6" />
+  </svg>
+);
+
+export const ScaleIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)}>
+    <path d="M12 4v16M8 20h8" />
+    <path d="M5 7h14" />
+    <path d="M5 7l-2.5 5.5a3 3 0 005 0L5 7zM19 7l-2.5 5.5a3 3 0 005 0L19 7z" />
+  </svg>
+);
+
+export const ImageIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)}>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="M4.5 17l4.5-4.5 3 3 3.5-3.5 4 4" />
+  </svg>
+);
+
+export const RupeeIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)} strokeWidth={2}>
+    <path d="M7 4h10M7 8.5h10M7 4c5 0 7 1.5 7 4.5S12 13 9 13H7l7 7" />
+  </svg>
+);

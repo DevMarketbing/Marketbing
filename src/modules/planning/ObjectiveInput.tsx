@@ -16,12 +16,13 @@ const templateIcons = {
 
 interface ObjectiveInputProps {
   initialValue: string;
+  busy?: boolean;
   onPlan: (objective: string) => void;
 }
 
-export default function ObjectiveInput({ initialValue, onPlan }: ObjectiveInputProps) {
+export default function ObjectiveInput({ initialValue, busy, onPlan }: ObjectiveInputProps) {
   const [value, setValue] = useState(initialValue);
-  const canSubmit = value.trim().length >= 10;
+  const canSubmit = value.trim().length >= 10 && !busy;
 
   return (
     <div className="mx-auto max-w-3xl animate-fade-up px-4 py-12 sm:px-8 sm:py-16">
@@ -56,7 +57,7 @@ export default function ObjectiveInput({ initialValue, onPlan }: ObjectiveInputP
             disabled={!canSubmit}
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 transition-all hover:shadow-lg hover:brightness-110 disabled:cursor-not-allowed disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none"
           >
-            Plan Workflow
+            {busy ? "Analyzing…" : "Plan Workflow"}
             <ArrowRightIcon className="h-4 w-4" />
           </button>
         </div>

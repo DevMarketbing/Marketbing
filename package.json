@@ -5,20 +5,31 @@
   "description": "AI-powered end-to-end marketing management platform — prototype",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "node scripts/dev.mjs",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:web": "vite",
+    "build": "tsc -b && tsc -p server && vite build",
+    "build:embedded": "tsc -b && VITE_EMBEDDED=1 vite build --outDir dist-embedded",
+    "start": "tsx server/index.ts",
     "preview": "vite preview"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4.1.4",
+    "tsx": "^4.23.13",
     "typescript": "~5.6.3",
     "vite": "^6.3.4"
   }

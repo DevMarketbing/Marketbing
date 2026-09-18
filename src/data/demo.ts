@@ -1,40 +1,4 @@
-import type { Influencer } from "../types";
-
-/**
- * DEMO DATA ONLY — fictional brand scenario used to demonstrate the
- * end-to-end flow without external integrations.
- */
-
-export const demoScenario = {
-  brand: "NovaSkin",
-  product: "NovaSkin Glow Serum",
-  objective:
-    "Launch our new Glow Serum and increase sales among women aged 18–30 in India over the next 60 days.",
-  desiredOutcome: "Generate ₹50 lakh in sales.",
-  products:
-    "NovaSkin Glow Serum — a new vitamin-C based face serum for daily use.",
-  region: "India",
-  targetAudience: "Women aged 18–30 interested in skincare and beauty.",
-  existingCustomers:
-    "Women aged 25–40, primarily existing skincare customers.",
-  currentMarketing:
-    "Instagram, Meta Ads and email marketing. ~85k Instagram followers, 120k email subscribers.",
-  budget: "₹20 lakh",
-  timeline: "60 days",
-  competitors: "GlowCo, SkinPure, DermaGlow",
-  brandMessaging:
-    "Science-backed skincare for everyday routines. Honest, clinical, approachable tone.",
-  restrictions: "Do not use misleading before/after claims.",
-  assets:
-    "Product photography, product video, brand logo, product descriptions.",
-};
-
-/** Previous-quarter marketing spend, illustrative. */
-export const historicalSpend = [
-  { quarter: "Q3 FY25", lakh: 12 },
-  { quarter: "Q4 FY25", lakh: 15 },
-  { quarter: "Q1 FY26", lakh: 18 },
-];
+/** Static UI content for Module 1 (prompt shortcuts, PO review lines). */
 
 export interface PromptTemplate {
   id: string;
@@ -67,56 +31,22 @@ export const promptTemplates: PromptTemplate[] = [
   },
 ];
 
-/** Fictional influencers used in the PO approval checkpoint. */
-export const demoInfluencers: Influencer[] = [
-  {
-    id: "inf-1",
-    name: "Ananya Rao",
-    handle: "@ananya.glow",
-    niche: "Skincare reviews",
-    followers: "1.2M",
-    engagement: "4.8%",
-    poAmountLakh: 3.5,
-    deliverables: "2 Reels + 3 Stories",
-  },
-  {
-    id: "inf-2",
-    name: "Priya Menon",
-    handle: "@priyaskin",
-    niche: "Beauty & routines",
-    followers: "860k",
-    engagement: "5.6%",
-    poAmountLakh: 2.4,
-    deliverables: "1 Reel + 4 Stories",
-  },
-  {
-    id: "inf-3",
-    name: "Sana Kapoor",
-    handle: "@sanacares",
-    niche: "Dermatology-adjacent",
-    followers: "540k",
-    engagement: "6.1%",
-    poAmountLakh: 1.8,
-    deliverables: "2 Reels + 2 Stories",
-  },
-  {
-    id: "inf-4",
-    name: "Mira Joshi",
-    handle: "@mirajoshi",
-    niche: "Lifestyle & beauty",
-    followers: "410k",
-    engagement: "5.2%",
-    poAmountLakh: 1.4,
-    deliverables: "1 Reel + 1 YouTube Short",
-  },
-  {
-    id: "inf-5",
-    name: "Divya Nair",
-    handle: "@divya.dailyskin",
-    niche: "Budget skincare",
-    followers: "290k",
-    engagement: "7.3%",
-    poAmountLakh: 0.9,
-    deliverables: "2 Reels + 3 Stories",
-  },
+/** Purchase-order lines shown at the PO approval checkpoint. */
+export interface POLine {
+  id: string;
+  name: string;
+  handle: string;
+  niche: string;
+  followers: string;
+  engagement: string;
+  poAmountLakh: number;
+  deliverables: string;
+}
+
+export const poLines: POLine[] = [
+  { id: "inf-ananya", name: "Ananya Rao", handle: "@ananya.glow", niche: "Skincare reviews", followers: "1.2M", engagement: "4.8%", poAmountLakh: 3.5, deliverables: "2 Reels + 3 Stories" },
+  { id: "inf-priya", name: "Priya Menon", handle: "@priyaskin", niche: "Beauty & routines", followers: "860k", engagement: "5.6%", poAmountLakh: 2.4, deliverables: "1 Reel + 4 Stories" },
+  { id: "inf-sana", name: "Sana Kapoor", handle: "@sanacares", niche: "Dermatology-adjacent", followers: "540k", engagement: "6.1%", poAmountLakh: 1.8, deliverables: "2 Reels + 2 Stories" },
+  { id: "inf-mira", name: "Mira Joshi", handle: "@mirajoshi", niche: "Lifestyle & beauty", followers: "410k", engagement: "5.2%", poAmountLakh: 1.4, deliverables: "1 Reel + 1 YouTube Short" },
+  { id: "inf-divya", name: "Divya Nair", handle: "@divya.dailyskin", niche: "Budget skincare", followers: "290k", engagement: "7.3%", poAmountLakh: 0.9, deliverables: "2 Reels + 3 Stories" },
 ];

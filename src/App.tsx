@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import ComingSoon from "./pages/ComingSoon";
 import { AccountPage, SettingsPage } from "./pages/SimplePages";
 import PlanningModule from "./modules/planning/PlanningModule";
+import MarketplaceModule from "./modules/marketplace/MarketplaceModule";
 import { MenuIcon, SparkIcon } from "./components/Icons";
 
 export default function App() {
@@ -41,17 +42,10 @@ export default function App() {
           <PlanningModule />
         </div>
         {route === "dashboard" && <Dashboard onNavigate={setRoute} />}
-        {route === "influencers" && (
-          <ComingSoon
-            title="Influencer Marketplace"
-            description="A dedicated space to view your associated influencers, their statistics, and allocate budget, products and resources across them."
-            futureItems={[
-              "Browse and manage associated influencers",
-              "Per-influencer performance statistics",
-              "Budget, product and resource allocation",
-            ]}
-          />
-        )}
+        {/* Marketplace stays mounted too, preserving list/compare state. */}
+        <div className={route === "influencers" ? "" : "hidden"}>
+          <MarketplaceModule />
+        </div>
         {route === "finance" && (
           <ComingSoon
             title="Finance, Sales & Products"

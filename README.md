@@ -1,75 +1,92 @@
-# Marketbing — AI Marketing Operations Platform (Prototype)
+# Marketbing — AI Marketing Operations Platform
 
-A working web prototype of an AI-powered end-to-end marketing management
-platform. The core idea:
+An AI-powered end-to-end marketing management platform. The core idea:
 
 > The business owner manages the **objective** and the **approvals** —
 > the system manages the marketing **operations**.
 
-```
-Business objective → required information → AI analysis → marketing strategies
-→ holistic plan → multiple execution options → user selects plan → execute
-→ autonomous execution → human approval when required → completion / results
-```
+Two modules are live; the third appears in navigation as Coming Soon:
 
-**This is a prototype/demonstration, not a production implementation.**
-All data is local mock data — no influencer APIs, no email sending, no ad
-platforms, no payments, no external communication of any kind.
+1. **Automatic Planning & Execution** — describe an objective, provide only
+   the context relevant to it, compare three AI-generated execution plans,
+   and watch the platform run the workflow autonomously, pausing at human
+   approval checkpoints (POs, go-live, sends).
+2. **Influencer Marketplace** — a stock-screener view of your influencer
+   roster: amount invested, campaign stats, ROI with a 12-week trend,
+   overall rating, and Invest/Divest actions backed by a wallet and
+   transaction ledger. Drill into any influencer, scope the analysis to a
+   product (or Overall), and work through Tasks, Payments, Alerts and
+   Posts tabs — or compare up to three influencers side by side.
+3. **Finance, Sales & Products** — Coming Soon (wallet operations, credit
+   limits, sales tracking, product insights).
 
 ## Running it
 
 ```bash
 npm install
-npm run dev        # local dev server
-npm run build      # type-check + production build
-npm run preview    # serve the production build
+npm run dev        # API server (:8787, tsx watch) + Vite dev server together
+# or separately: npm run dev:api / npm run dev:web
+
+npm run build      # type-check client + server, build the web client
+npm start          # serve API + built client on http://localhost:8787
 ```
 
-## Modules
+The SQLite database is created and seeded at `data/marketbing.db` on first
+boot. Delete the file to reset the workspace.
 
-1. **Automatic Planning & Execution** — fully interactive (this prototype).
-2. **Influencer Marketplace** — visible in navigation, marked *Coming Soon*.
-3. **Finance, Sales & Products** — visible in navigation, marked *Coming Soon*.
+End-to-end smoke test (needs a built client and the server running):
 
-Modules 2 and 3 exist only to communicate the overall product architecture.
-
-## The demo journey
-
-1. Enter an objective (or click a pre-created prompt such as
-   *"Create Marketing Plan"*). Demo scenario: the fictional brand
-   **NovaSkin** launching its **Glow Serum** in India.
-2. Click **Plan Workflow** — the system asks only for the context relevant
-   to that objective (an influencer objective asks for less than a holistic
-   plan; try different prompts to see the field set change).
-3. Watch the AI planning state, then review the **Recommended Marketing
-   Strategy** and three execution options: **Maximum Reach**, **Efficiency**
-   and **Balanced** (all values are illustrative demo values).
-4. Select a plan, review its full workflow, and click **Execute Plan**.
-5. Watch the vertical execution timeline progress — independent steps run in
-   parallel — until it pauses at the **PO approval** checkpoint.
-6. **Approve** (execution resumes automatically) or **Reject** (execution
-   halts until you review again). A second checkpoint gates campaign
-   go-live, then execution runs to completion.
+```bash
+node e2e/smoke.mjs [path-to-chromium]
+```
 
 ## Architecture
 
 ```
-src/
-  types.ts                     Entities: MarketingObjective, BusinessContext,
-                               MarketingStrategy, MarketingPlan, Workflow,
-                               WorkflowStep, Approval, Influencer, ExecutionStatus
-  data/demo.ts                 Demo scenario, prompt templates, influencers
-  lib/planner.ts               Deterministic mock AI planner — the seam where a
-                               real LLM/planning service would plug in
-  lib/useExecution.ts          Simulated autonomous execution engine
-                               (dependency-driven, parallel, approval gates) —
-                               replaceable by real backend job events
-  components/                  Sidebar, icons
-  pages/                       Dashboard, Coming Soon, Settings, Account
-  modules/planning/            Module 1: ObjectiveInput, ContextForm,
-                               AIPlanningState, PlansView, PlanDetail,
-                               ExecutionView (timeline + approvals + stats)
+shared/          Domain layer — shared by server and browser
+  types.ts       All entities (plans, workflow steps, runs, influencers,
+                 campaigns, positions, wallet, alerts, …)
+  planner.ts     Deterministic planning service — the seam where an
+                 LLM-backed planner plugs in
+  engine.ts      Execution engine: run state is a pure function of
+                 (run record, approvals, now) — no schedulers, restart-safe
+  services.ts    All business rules (marketplace maths, ratings, trades
+                 with validation, run lifecycle) over the DataStore interface
+  store.ts       DataStore interface + MemoryStore
+  seed.ts        Deterministic seed generator for a fresh workspace
+
+server/          Express API
+  index.ts       REST routes: /api/planner/*, /api/runs/*, /api/marketplace/*
+  sqliteStore.ts SQLite (better-sqlite3) DataStore; JSON-doc tables for
+                 catalog data, columns for hot scalars; seeds on first boot
+
+src/             React 18 + TypeScript + Tailwind 4 web client
+  api/           ApiClient interface; HTTP implementation + embedded
+                 implementation (same shared services in-browser with
+                 localStorage, used for the hosted demo: VITE_EMBEDDED=1)
+  modules/planning/     Module 1 UI (objective → context → plans → run)
+  modules/marketplace/  Module 2 UI (list, detail, compare, trade modal)
 ```
 
-Stack: React 18 + TypeScript + Tailwind CSS 4 + Vite. Local state only; no
-backend, no API keys.
+Design decisions worth knowing:
+
+- **One service layer, two runtimes.** Every business rule lives in
+  `shared/services.ts` against the `DataStore` interface, so the API server
+  (SQLite) and the hosted demo (in-browser memory + localStorage) run
+  byte-identical logic.
+- **Time-derived execution.** A run's step statuses are computed from
+  timestamps, durations, dependencies and recorded approval decisions —
+  the server holds no timers and survives restarts mid-run.
+- **Integration seams.** The planner, the campaign/social metrics feeds and
+  the payment rails are deliberately isolated: `planner.ts` stands in for an
+  LLM service, `seed.ts` stands in for social/commerce integrations, and
+  wallet trades stand in for real financial operations. Replacing any of
+  them does not touch UI or service code.
+
+## Current limits (v1)
+
+- Single-tenant, no authentication — add auth before exposing publicly.
+- Influencer/campaign metrics come from the deterministic seed generator,
+  not live social APIs; money movement is ledger-only.
+- The executor simulates step completion by duration; real integrations
+  would report completion events into the same engine.
