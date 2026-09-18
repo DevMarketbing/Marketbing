@@ -10,7 +10,7 @@ import type {
   Transaction,
   Wallet,
 } from "../shared/types";
-import { generateSeed } from "../shared/seed";
+import type { SeedData } from "../shared/seed";
 
 /**
  * SQLite-backed DataStore.
@@ -24,12 +24,15 @@ import { generateSeed } from "../shared/seed";
 export class SqliteStore implements DataStore {
   private db: Database.Database;
 
-  constructor(file: string) {
+  constructor(file: string, seed: SeedData) {
     this.db = new Database(file);
     this.db.pragma("journal_mode = WAL");
     this.migrate();
-    this.seedIfEmpty();
+    this.seedIfEmpty(seed);
   }
+
+  /** True when the database was already populated before this boot. */
+  public wasAlreadySeeded = false;
 
   private migrate() {
     this.db.exec(`
@@ -47,10 +50,12 @@ export class SqliteStore implements DataStore {
     `);
   }
 
-  private seedIfEmpty() {
+  private seedIfEmpty(seed: SeedData) {
     const count = this.db.prepare("SELECT COUNT(*) AS n FROM influencers").get() as { n: number };
-    if (count.n > 0) return;
-    const seed = generateSeed();
+    if (count.n > 0) {
+      this.wasAlreadySeeded = true;
+      return;
+    }
     const tx = this.db.transaction(() => {
       const insProduct = this.db.prepare("INSERT INTO products (id, doc) VALUES (?, ?)");
       for (const p of seed.products) insProduct.run(p.id, JSON.stringify(p));

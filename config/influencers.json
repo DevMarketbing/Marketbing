@@ -1,0 +1,138 @@
+[
+  {
+    "id": "inf-ananya",
+    "name": "Ananya Rao",
+    "handle": "@ananya.glow",
+    "niche": "Skincare reviews",
+    "tier": "macro",
+    "avatarHue": 262,
+    "bio": "Skincare educator breaking down actives and routines for 1M+ followers.",
+    "followers": 1200000,
+    "engagementRate": 4.8,
+    "performance": 1.35,
+    "products": [
+      "glow-serum",
+      "spf-shield",
+      "night-repair"
+    ],
+    "investedLakh": 3.5
+  },
+  {
+    "id": "inf-priya",
+    "name": "Priya Menon",
+    "handle": "@priyaskin",
+    "niche": "Beauty & routines",
+    "tier": "macro",
+    "avatarHue": 330,
+    "bio": "Morning-routine and GRWM content with a loyal 18–30 audience.",
+    "followers": 860000,
+    "engagementRate": 5.6,
+    "performance": 1.6,
+    "products": [
+      "glow-serum",
+      "hydra-cleanser",
+      "night-repair"
+    ],
+    "investedLakh": 2.4
+  },
+  {
+    "id": "inf-sana",
+    "name": "Sana Kapoor",
+    "handle": "@sanacares",
+    "niche": "Dermatology-adjacent",
+    "tier": "mid",
+    "avatarHue": 190,
+    "bio": "Evidence-first skincare content reviewed with a consulting dermatologist.",
+    "followers": 540000,
+    "engagementRate": 6.1,
+    "performance": 1.9,
+    "products": [
+      "glow-serum",
+      "spf-shield"
+    ],
+    "investedLakh": 1.8
+  },
+  {
+    "id": "inf-mira",
+    "name": "Mira Joshi",
+    "handle": "@mirajoshi",
+    "niche": "Lifestyle & beauty",
+    "tier": "mid",
+    "avatarHue": 24,
+    "bio": "Lifestyle creator blending beauty, travel and everyday fashion.",
+    "followers": 410000,
+    "engagementRate": 5.2,
+    "performance": 0.85,
+    "products": [
+      "glow-serum",
+      "hydra-cleanser"
+    ],
+    "investedLakh": 1.4
+  },
+  {
+    "id": "inf-divya",
+    "name": "Divya Nair",
+    "handle": "@divya.dailyskin",
+    "niche": "Budget skincare",
+    "tier": "micro",
+    "avatarHue": 152,
+    "bio": "Affordable skincare finds and honest empties for students.",
+    "followers": 290000,
+    "engagementRate": 7.3,
+    "performance": 2.3,
+    "products": [
+      "glow-serum",
+      "hydra-cleanser",
+      "spf-shield"
+    ],
+    "investedLakh": 0.9
+  },
+  {
+    "id": "inf-rhea",
+    "name": "Rhea Fernandes",
+    "handle": "@rheaglows",
+    "niche": "Makeup & skin prep",
+    "tier": "mid",
+    "avatarHue": 288,
+    "bio": "Makeup artist focused on skin prep — where skincare meets the brush.",
+    "followers": 620000,
+    "engagementRate": 4.1,
+    "performance": 1.1,
+    "products": [
+      "glow-serum",
+      "night-repair"
+    ]
+  },
+  {
+    "id": "inf-kavya",
+    "name": "Kavya Iyer",
+    "handle": "@kavya.skinlab",
+    "niche": "Ingredient science",
+    "tier": "micro",
+    "avatarHue": 210,
+    "bio": "Chemistry grad decoding INCI lists and ingredient interactions.",
+    "followers": 180000,
+    "engagementRate": 8.1,
+    "performance": 2,
+    "products": [
+      "spf-shield",
+      "night-repair"
+    ]
+  },
+  {
+    "id": "inf-tara",
+    "name": "Tara Bhatt",
+    "handle": "@tarabhatt",
+    "niche": "Fitness & wellness",
+    "tier": "mid",
+    "avatarHue": 84,
+    "bio": "Wellness and fitness creator — skincare for active, outdoor lifestyles.",
+    "followers": 470000,
+    "engagementRate": 3.6,
+    "performance": 0.6,
+    "products": [
+      "spf-shield",
+      "hydra-cleanser"
+    ]
+  }
+]

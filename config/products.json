@@ -1,0 +1,22 @@
+[
+  {
+    "id": "glow-serum",
+    "name": "Glow Serum",
+    "priceInr": 899
+  },
+  {
+    "id": "hydra-cleanser",
+    "name": "Hydra Cleanser",
+    "priceInr": 549
+  },
+  {
+    "id": "spf-shield",
+    "name": "SPF 50 Shield",
+    "priceInr": 699
+  },
+  {
+    "id": "night-repair",
+    "name": "Night Repair Cream",
+    "priceInr": 1099
+  }
+]

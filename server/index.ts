@@ -3,6 +3,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { SqliteStore } from "./sqliteStore";
+import { loadSeedOverrides } from "./config";
+import { generateSeed } from "../shared/seed";
 import { analyzeObjective, generatePlans } from "../shared/planner";
 import {
   ApiError,
@@ -17,11 +19,34 @@ import {
 } from "../shared/services";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(__dirname, "..");
+
+// Secrets and server settings live in .env (see .env.example) — never in code.
+const envFile = path.join(ROOT, ".env");
+if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
+
 const PORT = Number(process.env.PORT ?? 8787);
-const DB_FILE = process.env.DB_FILE ?? path.join(__dirname, "..", "data", "marketbing.db");
+const DB_FILE = process.env.DB_FILE ?? path.join(ROOT, "data", "marketbing.db");
+const CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(ROOT, "config");
+
+// Editable workspace data (products, influencers, wallet) comes from config/.
+let overrides;
+try {
+  overrides = loadSeedOverrides(CONFIG_DIR);
+} catch (e) {
+  console.error(`\n${(e as Error).message}\n`);
+  process.exit(1);
+}
 
 fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
-const store = new SqliteStore(DB_FILE);
+const store = new SqliteStore(DB_FILE, generateSeed(undefined, overrides));
+if (store.wasAlreadySeeded) {
+  console.log(
+    "Using the existing database — edits to the config/ folder apply after `npm run db:reset`.",
+  );
+} else {
+  console.log("Fresh database seeded from the config/ folder.");
+}
 
 const app = express();
 app.use(express.json({ limit: "256kb" }));

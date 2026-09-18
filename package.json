@@ -11,7 +11,8 @@
     "build": "tsc -b && tsc -p server && vite build",
     "build:embedded": "tsc -b && VITE_EMBEDDED=1 vite build --outDir dist-embedded",
     "start": "tsx server/index.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:reset": "node -e \"require('fs').rmSync('data',{recursive:true,force:true});console.log('Database cleared - it will be rebuilt from the config/ folder on next start.')\""
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

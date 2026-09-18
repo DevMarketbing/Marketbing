@@ -31,8 +31,20 @@ npm run build      # type-check client + server, build the web client
 npm start          # serve API + built client on http://localhost:8787
 ```
 
-The SQLite database is created and seeded at `data/marketbing.db` on first
-boot. Delete the file to reset the workspace.
+## Configuration (no coding needed)
+
+- **`config/` folder** — the workspace's editable data: `products.json`,
+  `influencers.json` and `workspace.json`, documented field by field in
+  [`config/README.md`](config/README.md). Edit → `npm run db:reset` →
+  restart, and the app rebuilds from your files. Mistakes don't crash
+  cryptically: the server refuses to start and prints the file name and
+  entry number of every problem.
+- **`.env` file** — API keys and server settings. Copy `.env.example` to
+  `.env` and fill in values; `.env` is gitignored so secrets never reach
+  the repository. Integration keys (Claude API, Meta/Instagram, email,
+  payments) already have labelled slots for when those integrations land.
+- **`data/` folder** — the SQLite database (`marketbing.db`), created and
+  seeded from `config/` on first boot. `npm run db:reset` clears it.
 
 End-to-end smoke test (needs a built client and the server running):
 
