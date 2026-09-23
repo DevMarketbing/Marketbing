@@ -2,7 +2,7 @@
   "name": "marketbing",
   "private": true,
   "version": "0.1.0",
-  "description": "AI-powered end-to-end marketing management platform — prototype",
+  "description": "AI-powered end-to-end marketing management platform \u2014 prototype",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -12,11 +12,12 @@
     "build:embedded": "tsc -b && VITE_EMBEDDED=1 vite build --outDir dist-embedded",
     "start": "tsx server/index.ts",
     "preview": "vite preview",
-    "db:reset": "node -e \"require('fs').rmSync('data',{recursive:true,force:true});console.log('Database cleared - it will be rebuilt from the config/ folder on next start.')\""
+    "db:reset": "tsx server/db/reset.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
+    "pg": "^8.23.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -25,6 +26,7 @@
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.1",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

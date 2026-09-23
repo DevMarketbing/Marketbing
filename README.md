@@ -43,8 +43,28 @@ npm start          # serve API + built client on http://localhost:8787
   `.env` and fill in values; `.env` is gitignored so secrets never reach
   the repository. Integration keys (Claude API, Meta/Instagram, email,
   payments) already have labelled slots for when those integrations land.
-- **`data/` folder** — the SQLite database (`marketbing.db`), created and
-  seeded from `config/` on first boot. `npm run db:reset` clears it.
+- **Database** — Supabase (hosted Postgres) when `DATABASE_URL` is set in
+  `.env`; otherwise a local SQLite file in `data/`. Either way it is created
+  and seeded from `config/` on first boot. `npm run db:reset` clears it
+  (for Supabase it asks you to type `RESET` first).
+
+## Connecting Supabase
+
+1. Create a project at supabase.com. Pick the **South Asia (Mumbai)**
+   region and save the database password it asks you for.
+2. In the project, click **Connect** → **Session pooler** and copy the URI.
+3. In `.env`, paste it after `DATABASE_URL=` and replace `[YOUR-PASSWORD]`
+   (brackets included) with your password.
+4. Recommended: **Project Settings → Database → SSL Configuration →
+   Download certificate**, save it in the project folder as
+   `supabase-ca.crt`, set `DATABASE_CA_CERT=./supabase-ca.crt`, and turn on
+   **Enforce SSL** on the same page.
+5. `npm start`. The server creates its tables and loads your `config/`
+   data automatically; if it can't connect it says why and how to fix it.
+
+The tables live in a schema called `marketbing` (pick it from the schema
+menu in Supabase's Table Editor). It is deliberately not the `public`
+schema, which Supabase publishes through its public REST API.
 
 End-to-end smoke test (needs a built client and the server running):
 
@@ -64,13 +84,16 @@ shared/          Domain layer — shared by server and browser
                  (run record, approvals, now) — no schedulers, restart-safe
   services.ts    All business rules (marketplace maths, ratings, trades
                  with validation, run lifecycle) over the DataStore interface
-  store.ts       DataStore interface + MemoryStore
+  store.ts       Async DataStore interface + MemoryStore
   seed.ts        Deterministic seed generator for a fresh workspace
 
 server/          Express API
   index.ts       REST routes: /api/planner/*, /api/runs/*, /api/marketplace/*
-  sqliteStore.ts SQLite (better-sqlite3) DataStore; JSON-doc tables for
-                 catalog data, columns for hot scalars; seeds on first boot
+  pgStore.ts     Postgres/Supabase DataStore; jsonb documents for catalog
+                 data, numeric columns for money and the ledger
+  sqliteStore.ts SQLite DataStore used when DATABASE_URL is unset
+  db/            Connection (SSL, friendly errors), versioned SQL
+                 migrations applied on boot, and the reset command
 
 src/             React 18 + TypeScript + Tailwind 4 web client
   api/           ApiClient interface; HTTP implementation + embedded
@@ -86,6 +109,9 @@ Design decisions worth knowing:
   `shared/services.ts` against the `DataStore` interface, so the API server
   (SQLite) and the hosted demo (in-browser memory + localStorage) run
   byte-identical logic.
+- **Transactional money movement.** Trades and approvals run in a database
+  transaction that locks the wallet (or run) row, so simultaneous clicks
+  can never overspend the wallet.
 - **Time-derived execution.** A run's step statuses are computed from
   timestamps, durations, dependencies and recorded approval decisions —
   the server holds no timers and survives restarts mid-run.

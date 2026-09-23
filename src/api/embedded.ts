@@ -81,7 +81,7 @@ export function createEmbeddedClient(): ApiClient {
     },
     async resolveAlert(alertId) {
       await delay(120);
-      resolveAlert(store, alertId);
+      await resolveAlert(store, alertId);
     },
   };
 }

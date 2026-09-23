@@ -2,12 +2,15 @@ import type { DataStore } from "./store";
 import type {
   BusinessContext,
   Campaign,
+  CampaignAlert,
   CampaignView,
   CompareEntry,
   InfluencerDetail,
+  InfluencerProfile,
   InfluencerSummary,
   MarketplaceOverview,
   ObjectiveKind,
+  Position,
   RunRecord,
   RunState,
   TradeResult,
@@ -32,12 +35,29 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /* ---------------------------- marketplace ---------------------------- */
 
-function summarize(store: DataStore, influencerId: string): InfluencerSummary {
-  const profile = store.listInfluencers().find((i) => i.id === influencerId);
+interface MarketData {
+  influencers: InfluencerProfile[];
+  campaigns: Campaign[];
+  alerts: CampaignAlert[];
+  positions: Position[];
+}
+
+async function loadMarket(store: DataStore): Promise<MarketData> {
+  const [influencers, campaigns, alerts, positions] = await Promise.all([
+    store.listInfluencers(),
+    store.listCampaigns(),
+    store.listAlerts(),
+    store.listPositions(),
+  ]);
+  return { influencers, campaigns, alerts, positions };
+}
+
+function summarize(data: MarketData, influencerId: string): InfluencerSummary {
+  const profile = data.influencers.find((i) => i.id === influencerId);
   if (!profile) throw new ApiError(404, `Unknown influencer "${influencerId}"`);
-  const campaigns = store.listCampaigns().filter((c) => c.influencerId === influencerId);
-  const alerts = store.listAlerts().filter((a) => a.influencerId === influencerId && !a.resolved);
-  const position = store.listPositions().find((p) => p.influencerId === influencerId);
+  const campaigns = data.campaigns.filter((c) => c.influencerId === influencerId);
+  const alerts = data.alerts.filter((a) => a.influencerId === influencerId && !a.resolved);
+  const position = data.positions.find((p) => p.influencerId === influencerId);
 
   const spendLakh = round1(campaigns.reduce((s, c) => s + c.spendLakh, 0));
   const salesLakh = round1(campaigns.reduce((s, c) => s + c.salesLakh, 0));
@@ -79,23 +99,22 @@ function summarize(store: DataStore, influencerId: string): InfluencerSummary {
   };
 }
 
-export function getMarketplaceOverview(store: DataStore): MarketplaceOverview {
-  const influencers = store.listInfluencers().map((i) => summarize(store, i.id));
+export async function getMarketplaceOverview(store: DataStore): Promise<MarketplaceOverview> {
+  const [data, wallet] = await Promise.all([loadMarket(store), store.getWallet()]);
+  const influencers = data.influencers.map((i) => summarize(data, i.id));
   const totalInvestedLakh = round1(influencers.reduce((s, i) => s + i.investedLakh, 0));
   const totalSpend = influencers.reduce((s, i) => s + i.spendLakh, 0);
   const totalSales = influencers.reduce((s, i) => s + i.salesLakh, 0);
   return {
-    wallet: store.getWallet(),
+    wallet,
     totalInvestedLakh,
     portfolioRoi: totalSpend > 0 ? round2(totalSales / totalSpend) : 0,
     influencers,
   };
 }
 
-function buildView(store: DataStore, influencerId: string, productId: string | "overall"): CampaignView {
-  let campaigns: Campaign[] = store
-    .listCampaigns()
-    .filter((c) => c.influencerId === influencerId);
+function buildView(data: MarketData, influencerId: string, productId: string | "overall"): CampaignView {
+  let campaigns: Campaign[] = data.campaigns.filter((c) => c.influencerId === influencerId);
   if (productId !== "overall") {
     campaigns = campaigns.filter((c) => c.productId === productId);
     if (campaigns.length === 0) {
@@ -107,9 +126,9 @@ function buildView(store: DataStore, influencerId: string, productId: string | "
   const reach = campaigns.reduce((s, c) => s + c.reach, 0);
   const likes = campaigns.reduce((s, c) => s + c.likes, 0);
   const comments = campaigns.reduce((s, c) => s + c.comments, 0);
-  const alerts = store
-    .listAlerts()
-    .filter((a) => a.influencerId === influencerId && (productId === "overall" || a.productId === productId));
+  const alerts = data.alerts.filter(
+    (a) => a.influencerId === influencerId && (productId === "overall" || a.productId === productId),
+  );
 
   const totalSpend = campaigns.reduce((s, c) => s + c.spendLakh, 0);
   const roiTrend = Array.from({ length: 12 }, (_, w) =>
@@ -137,46 +156,62 @@ function buildView(store: DataStore, influencerId: string, productId: string | "
   };
 }
 
-export function getInfluencerDetail(
+export async function getInfluencerDetail(
   store: DataStore,
   influencerId: string,
   productId: string | "overall",
-): InfluencerDetail {
-  const summary = summarize(store, influencerId);
+): Promise<InfluencerDetail> {
+  const [data, wallet, products] = await Promise.all([
+    loadMarket(store),
+    store.getWallet(),
+    store.listProducts(),
+  ]);
+  const summary = summarize(data, influencerId);
   const productIds = new Set(
-    store.listCampaigns().filter((c) => c.influencerId === influencerId).map((c) => c.productId),
+    data.campaigns.filter((c) => c.influencerId === influencerId).map((c) => c.productId),
   );
   return {
     summary,
-    wallet: store.getWallet(),
-    products: store.listProducts().filter((p) => productIds.has(p.id)),
-    view: buildView(store, influencerId, productId),
+    wallet,
+    products: products.filter((p) => productIds.has(p.id)),
+    view: buildView(data, influencerId, productId),
   };
 }
 
-export function compareInfluencers(store: DataStore, ids: string[]): CompareEntry[] {
+export async function compareInfluencers(store: DataStore, ids: string[]): Promise<CompareEntry[]> {
   if (ids.length < 2 || ids.length > 3) {
     throw new ApiError(400, "Compare takes 2 or 3 influencer ids");
   }
-  return ids.map((id) => ({ summary: summarize(store, id) }));
+  const data = await loadMarket(store);
+  return ids.map((id) => ({ summary: summarize(data, id) }));
 }
 
-export function trade(
+export async function trade(
   store: DataStore,
   influencerId: string,
   type: "invest" | "divest",
   amountLakh: number,
   now: number,
-): TradeResult {
+): Promise<TradeResult> {
   if (!Number.isFinite(amountLakh) || amountLakh <= 0) {
     throw new ApiError(400, "Amount must be a positive number of lakhs");
   }
   amountLakh = round1(amountLakh);
-  const profile = store.listInfluencers().find((i) => i.id === influencerId);
+  const profile = (await store.listInfluencers()).find((i) => i.id === influencerId);
   if (!profile) throw new ApiError(404, `Unknown influencer "${influencerId}"`);
+  return store.transaction((tx) => applyTrade(tx, influencerId, type, amountLakh, now));
+}
 
-  const wallet = store.getWallet();
-  const position = store.listPositions().find((p) => p.influencerId === influencerId) ?? {
+async function applyTrade(
+  store: DataStore,
+  influencerId: string,
+  type: "invest" | "divest",
+  amountLakh: number,
+  now: number,
+): Promise<TradeResult> {
+  // Read the wallet first: in a transaction it takes the lock that serializes trades.
+  const wallet = await store.getWallet();
+  const position = (await store.listPositions()).find((p) => p.influencerId === influencerId) ?? {
     influencerId,
     investedLakh: 0,
   };
@@ -202,16 +237,16 @@ export function trade(
     amountLakh,
     at: now,
   };
-  store.saveWallet(wallet);
-  store.savePosition(position);
-  store.addTransaction(transaction);
+  await store.saveWallet(wallet);
+  await store.savePosition(position);
+  await store.addTransaction(transaction);
   return { wallet, position, transaction };
 }
 
-export function resolveAlert(store: DataStore, alertId: string): void {
-  const alert = store.listAlerts().find((a) => a.id === alertId);
+export async function resolveAlert(store: DataStore, alertId: string): Promise<void> {
+  const alert = (await store.listAlerts()).find((a) => a.id === alertId);
   if (!alert) throw new ApiError(404, `Unknown alert "${alertId}"`);
-  store.saveAlert({ ...alert, resolved: true });
+  await store.saveAlert({ ...alert, resolved: true });
 }
 
 /* ------------------------------- runs ------------------------------- */
@@ -223,7 +258,7 @@ export interface CreateRunInput {
   context: BusinessContext;
 }
 
-export function createRun(store: DataStore, input: CreateRunInput, now: number): RunState {
+export async function createRun(store: DataStore, input: CreateRunInput, now: number): Promise<RunState> {
   const { plans } = generatePlans(input.kind);
   const plan = plans.find((p) => p.id === input.planId);
   if (!plan) throw new ApiError(400, `Unknown plan "${input.planId}"`);
@@ -242,30 +277,32 @@ export function createRun(store: DataStore, input: CreateRunInput, now: number):
     approvals: {},
     createdAt: now,
   };
-  store.saveRun(run);
+  await store.saveRun(run);
   return computeRunState(run, now);
 }
 
-export function getRunState(store: DataStore, runId: string, now: number): RunState {
-  const run = store.getRun(runId);
+export async function getRunState(store: DataStore, runId: string, now: number): Promise<RunState> {
+  const run = await store.getRun(runId);
   if (!run) throw new ApiError(404, `Unknown run "${runId}"`);
   return computeRunState(run, now);
 }
 
-export function decideApproval(
+export async function decideApproval(
   store: DataStore,
   runId: string,
   stepId: string,
   action: ApprovalAction,
   now: number,
-): RunState {
-  const run = store.getRun(runId);
-  if (!run) throw new ApiError(404, `Unknown run "${runId}"`);
-  try {
-    applyApproval(run, stepId, action, now);
-  } catch (e) {
-    throw new ApiError(400, (e as Error).message);
-  }
-  store.saveRun(run);
-  return computeRunState(run, now);
+): Promise<RunState> {
+  return store.transaction(async (tx) => {
+    const run = await tx.getRun(runId);
+    if (!run) throw new ApiError(404, `Unknown run "${runId}"`);
+    try {
+      applyApproval(run, stepId, action, now);
+    } catch (e) {
+      throw new ApiError(400, (e as Error).message);
+    }
+    await tx.saveRun(run);
+    return computeRunState(run, now);
+  });
 }

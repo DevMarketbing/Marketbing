@@ -1,8 +1,11 @@
+import { ROOT } from "./env";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
-import { fileURLToPath } from "node:url";
 import { SqliteStore } from "./sqliteStore";
+import { PgStore } from "./pgStore";
+import { createPool, describeTarget, explainDbError, migrate } from "./db/postgres";
+import type { DataStore } from "../shared/store";
 import { loadSeedOverrides } from "./config";
 import { generateSeed } from "../shared/seed";
 import { analyzeObjective, generatePlans } from "../shared/planner";
@@ -18,16 +21,10 @@ import {
   trade,
 } from "../shared/services";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, "..");
-
-// Secrets and server settings live in .env (see .env.example) — never in code.
-const envFile = path.join(ROOT, ".env");
-if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
-
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_FILE = process.env.DB_FILE ?? path.join(ROOT, "data", "marketbing.db");
 const CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(ROOT, "config");
+const DATABASE_URL = process.env.DATABASE_URL?.trim();
 
 // Editable workspace data (products, influencers, wallet) comes from config/.
 let overrides;
@@ -38,15 +35,34 @@ try {
   process.exit(1);
 }
 
-fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
-const store = new SqliteStore(DB_FILE, generateSeed(undefined, overrides));
-if (store.wasAlreadySeeded) {
-  console.log(
-    "Using the existing database — edits to the config/ folder apply after `npm run db:reset`.",
-  );
+const seed = generateSeed(undefined, overrides);
+let store: DataStore;
+let dbLabel: string;
+let seeded: boolean;
+
+if (DATABASE_URL) {
+  dbLabel = `Postgres ${describeTarget(DATABASE_URL)}`;
+  try {
+    const pool = createPool(DATABASE_URL, process.env.DATABASE_CA_CERT?.trim() || undefined);
+    const applied = await migrate(pool);
+    if (applied.length) console.log(`Database schema updated: ${applied.join(", ")}`);
+    ({ store, seeded } = await PgStore.open(pool, seed));
+  } catch (e) {
+    console.error(`\nCould not connect to the database (${dbLabel}):\n  ${explainDbError(e)}\n`);
+    process.exit(1);
+  }
 } else {
-  console.log("Fresh database seeded from the config/ folder.");
+  dbLabel = `SQLite ${DB_FILE}`;
+  fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
+  const sqlite = new SqliteStore(DB_FILE, seed);
+  store = sqlite;
+  seeded = !sqlite.wasAlreadySeeded;
 }
+console.log(
+  seeded
+    ? "Fresh database seeded from the config/ folder."
+    : "Using the existing database — edits to the config/ folder apply after `npm run db:reset`.",
+);
 
 const app = express();
 app.use(express.json({ limit: "256kb" }));
@@ -79,49 +95,49 @@ api.post("/planner/plans", (req, res) => {
   res.json(generatePlans(kind));
 });
 
-api.post("/runs", (req, res) => {
+api.post("/runs", async (req, res) => {
   const { objective, kind, planId, context } = req.body ?? {};
   if (!["holistic", "influencer", "email"].includes(kind)) throw new ApiError(400, "Invalid objective kind");
-  res.status(201).json(createRun(store, { objective, kind, planId, context }, Date.now()));
+  res.status(201).json(await createRun(store, { objective, kind, planId, context }, Date.now()));
 });
 
-api.get("/runs/:id", (req, res) => {
-  res.json(getRunState(store, req.params.id, Date.now()));
+api.get("/runs/:id", async (req, res) => {
+  res.json(await getRunState(store, req.params.id, Date.now()));
 });
 
-api.post("/runs/:id/approval", (req, res) => {
+api.post("/runs/:id/approval", async (req, res) => {
   const { stepId, action } = req.body ?? {};
   if (!["approve", "reject", "reopen"].includes(action)) throw new ApiError(400, "Invalid approval action");
   if (typeof stepId !== "string") throw new ApiError(400, "stepId is required");
-  res.json(decideApproval(store, req.params.id, stepId, action, Date.now()));
+  res.json(await decideApproval(store, req.params.id, stepId, action, Date.now()));
 });
 
 /* ---------------------------- Module 2 ---------------------------- */
 
-api.get("/marketplace/overview", (_req, res) => {
-  res.json(getMarketplaceOverview(store));
+api.get("/marketplace/overview", async (_req, res) => {
+  res.json(await getMarketplaceOverview(store));
 });
 
-api.get("/marketplace/influencers/:id", (req, res) => {
+api.get("/marketplace/influencers/:id", async (req, res) => {
   const productId = typeof req.query.product === "string" ? req.query.product : "overall";
-  res.json(getInfluencerDetail(store, req.params.id, productId));
+  res.json(await getInfluencerDetail(store, req.params.id, productId));
 });
 
-api.post("/marketplace/influencers/:id/invest", (req, res) => {
-  res.json(trade(store, req.params.id, "invest", Number(req.body?.amountLakh), Date.now()));
+api.post("/marketplace/influencers/:id/invest", async (req, res) => {
+  res.json(await trade(store, req.params.id, "invest", Number(req.body?.amountLakh), Date.now()));
 });
 
-api.post("/marketplace/influencers/:id/divest", (req, res) => {
-  res.json(trade(store, req.params.id, "divest", Number(req.body?.amountLakh), Date.now()));
+api.post("/marketplace/influencers/:id/divest", async (req, res) => {
+  res.json(await trade(store, req.params.id, "divest", Number(req.body?.amountLakh), Date.now()));
 });
 
-api.get("/marketplace/compare", (req, res) => {
+api.get("/marketplace/compare", async (req, res) => {
   const ids = String(req.query.ids ?? "").split(",").filter(Boolean);
-  res.json(compareInfluencers(store, ids));
+  res.json(await compareInfluencers(store, ids));
 });
 
-api.post("/marketplace/alerts/:id/resolve", (req, res) => {
-  resolveAlert(store, req.params.id);
+api.post("/marketplace/alerts/:id/resolve", async (req, res) => {
+  await resolveAlert(store, req.params.id);
   res.json({ ok: true });
 });
 
@@ -138,7 +154,7 @@ app.use("/api", ((err, _req, res, _next) => {
 }) as express.ErrorRequestHandler);
 
 /* Serve the built web client (SPA fallback to index.html). */
-const dist = path.join(__dirname, "..", "dist");
+const dist = path.join(ROOT, "dist");
 if (fs.existsSync(dist)) {
   app.use(express.static(dist));
   app.get(/^\/(?!api\/).*/, (_req, res) => {
@@ -147,5 +163,5 @@ if (fs.existsSync(dist)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Marketbing API listening on http://localhost:${PORT} (db: ${DB_FILE})`);
+  console.log(`Marketbing API listening on http://localhost:${PORT} (db: ${dbLabel})`);
 });

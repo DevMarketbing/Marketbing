@@ -82,23 +82,23 @@ export class SqliteStore implements DataStore {
     return (this.db.prepare(sql).all(...params) as { doc: string }[]).map((r) => JSON.parse(r.doc) as T);
   }
 
-  listProducts(): Product[] {
+  async listProducts(): Promise<Product[]> {
     return this.docs<Product>("SELECT doc FROM products");
   }
 
-  listInfluencers(): InfluencerProfile[] {
+  async listInfluencers(): Promise<InfluencerProfile[]> {
     return this.docs<InfluencerProfile>("SELECT doc FROM influencers");
   }
 
-  listCampaigns(): Campaign[] {
+  async listCampaigns(): Promise<Campaign[]> {
     return this.docs<Campaign>("SELECT doc FROM campaigns");
   }
 
-  listAlerts(): CampaignAlert[] {
+  async listAlerts(): Promise<CampaignAlert[]> {
     return this.docs<CampaignAlert>("SELECT doc FROM alerts");
   }
 
-  saveAlert(alert: CampaignAlert): void {
+  async saveAlert(alert: CampaignAlert): Promise<void> {
     this.db
       .prepare(
         "INSERT INTO alerts (id, influencer_id, resolved, doc) VALUES (@id, @inf, @res, @doc) " +
@@ -107,14 +107,14 @@ export class SqliteStore implements DataStore {
       .run({ id: alert.id, inf: alert.influencerId, res: alert.resolved ? 1 : 0, doc: JSON.stringify(alert) });
   }
 
-  getWallet(): Wallet {
+  async getWallet(): Promise<Wallet> {
     const row = this.db.prepare("SELECT balance_lakh FROM wallet WHERE id = 1").get() as
       | { balance_lakh: number }
       | undefined;
     return { balanceLakh: row?.balance_lakh ?? 0 };
   }
 
-  saveWallet(wallet: Wallet): void {
+  async saveWallet(wallet: Wallet): Promise<void> {
     this.db
       .prepare(
         "INSERT INTO wallet (id, balance_lakh) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET balance_lakh = excluded.balance_lakh",
@@ -122,14 +122,14 @@ export class SqliteStore implements DataStore {
       .run(wallet.balanceLakh);
   }
 
-  listPositions(): Position[] {
+  async listPositions(): Promise<Position[]> {
     return (this.db.prepare("SELECT influencer_id, invested_lakh FROM positions").all() as {
       influencer_id: string;
       invested_lakh: number;
     }[]).map((r) => ({ influencerId: r.influencer_id, investedLakh: r.invested_lakh }));
   }
 
-  savePosition(position: Position): void {
+  async savePosition(position: Position): Promise<void> {
     this.db
       .prepare(
         "INSERT INTO positions (influencer_id, invested_lakh) VALUES (?, ?) " +
@@ -138,24 +138,38 @@ export class SqliteStore implements DataStore {
       .run(position.influencerId, position.investedLakh);
   }
 
-  listTransactions(): Transaction[] {
+  async listTransactions(): Promise<Transaction[]> {
     return this.docs<Transaction>("SELECT doc FROM transactions ORDER BY at DESC");
   }
 
-  addTransaction(tx: Transaction): void {
+  async addTransaction(tx: Transaction): Promise<void> {
     this.db.prepare("INSERT INTO transactions (id, at, doc) VALUES (?, ?, ?)").run(tx.id, tx.at, JSON.stringify(tx));
   }
 
-  getRun(id: string): RunRecord | null {
+  async getRun(id: string): Promise<RunRecord | null> {
     const row = this.db.prepare("SELECT doc FROM runs WHERE id = ?").get(id) as { doc: string } | undefined;
     return row ? (JSON.parse(row.doc) as RunRecord) : null;
   }
 
-  saveRun(run: RunRecord): void {
+  async saveRun(run: RunRecord): Promise<void> {
     this.db
       .prepare(
         "INSERT INTO runs (id, created_at, doc) VALUES (@id, @at, @doc) ON CONFLICT(id) DO UPDATE SET doc = @doc",
       )
       .run({ id: run.id, at: run.createdAt, doc: JSON.stringify(run) });
+  }
+
+  // Store calls never wait on I/O, so no other request can run between BEGIN and COMMIT.
+  async transaction<T>(fn: (store: DataStore) => Promise<T>): Promise<T> {
+    if (this.db.inTransaction) return fn(this);
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const result = await fn(this);
+      this.db.exec("COMMIT");
+      return result;
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
   }
 }

@@ -10,7 +10,8 @@ npm start
 ```
 
 (Resetting clears trades, resolved alerts and past runs — the app rebuilds
-everything from these files.)
+everything from these files. If you're connected to Supabase, it asks you
+to type `RESET` to confirm, because it deletes the data in Supabase too.)
 
 If a file has a mistake in it, the server won't start; it prints the file
 name and entry number of each problem so you know exactly what to fix.
