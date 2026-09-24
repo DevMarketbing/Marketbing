@@ -7,3 +7,8 @@ export const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), ".."
 // Secrets and server settings live in .env (see .env.example) — never in code.
 const envFile = path.join(ROOT, ".env");
 if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
+
+/** Where state is kept when SQLite's native addon cannot load (next to DB_FILE). */
+export function jsonFallbackFile(dbFile: string): string {
+  return dbFile.replace(/\.db$/, "") + ".json";
+}

@@ -1,11 +1,11 @@
-import { ROOT } from "./env";
+import { ROOT, jsonFallbackFile } from "./env";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
 import { SqliteStore } from "./sqliteStore";
 import { PgStore } from "./pgStore";
 import { createPool, describeTarget, explainDbError, migrate } from "./db/postgres";
-import type { DataStore } from "../shared/store";
+import { MemoryStore, type DataStore, type MutableState } from "../shared/store";
 import { loadSeedOverrides } from "./config";
 import { generateSeed } from "../shared/seed";
 import { analyzeObjective, generatePlans } from "../shared/planner";
@@ -52,11 +52,24 @@ if (DATABASE_URL) {
     process.exit(1);
   }
 } else {
-  dbLabel = `SQLite ${DB_FILE}`;
   fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
-  const sqlite = new SqliteStore(DB_FILE, seed);
-  store = sqlite;
-  seeded = !sqlite.wasAlreadySeeded;
+  try {
+    const sqlite = new SqliteStore(DB_FILE, seed);
+    dbLabel = `SQLite ${DB_FILE}`;
+    store = sqlite;
+    seeded = !sqlite.wasAlreadySeeded;
+  } catch (e) {
+    // Runtimes that cannot load native addons (e.g. StackBlitz WebContainers)
+    // can't run better-sqlite3; keep working with a JSON-file-backed store.
+    const jsonFile = jsonFallbackFile(DB_FILE);
+    console.warn(`\nSQLite is unavailable here (${(e as Error).message.split("\n")[0]}).`);
+    console.warn(`Falling back to a JSON file store: ${jsonFile}\n`);
+    let saved: MutableState | undefined;
+    if (fs.existsSync(jsonFile)) saved = JSON.parse(fs.readFileSync(jsonFile, "utf8")) as MutableState;
+    store = new MemoryStore(seed, saved, (state) => fs.writeFileSync(jsonFile, JSON.stringify(state)));
+    dbLabel = `JSON ${jsonFile}`;
+    seeded = !saved;
+  }
 }
 console.log(
   seeded
