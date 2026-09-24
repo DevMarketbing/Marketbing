@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MarketingPlan, ObjectiveKind, RunState, StepStatus, WorkflowStep } from "../../types";
 import { api } from "../../api";
 import { groupSteps } from "./workflowLayout";
-import { poLines } from "../../data/demo";
+import { poLines } from "../../data/planningContent";
 import { AlertIcon, CheckIcon, ClockIcon, SparkIcon } from "../../components/Icons";
 
 interface ExecutionViewProps {

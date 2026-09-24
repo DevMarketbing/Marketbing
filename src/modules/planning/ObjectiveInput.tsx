@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { promptTemplates } from "../../data/demo";
+import { promptTemplates } from "../../data/planningContent";
 import {
   ClipboardIcon,
   MailIcon,

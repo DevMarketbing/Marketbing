@@ -1,0 +1,23 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# One web service: Express serves the API and the built React app.
+# Data lives in Supabase (DATABASE_URL); the server migrates it on start.
+services:
+  - type: web
+    name: marketbing
+    runtime: node
+    plan: free
+    # --include=dev: the build needs TypeScript/Vite from devDependencies.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Supabase → Connect → Session pooler URI, with your password filled in.
+      # Entered in the Render dashboard; never committed.
+      - key: DATABASE_URL
+        sync: false
+      # Supabase's public root CA (committed), so the TLS connection is verified.
+      - key: DATABASE_CA_CERT
+        value: ./supabase-ca.crt

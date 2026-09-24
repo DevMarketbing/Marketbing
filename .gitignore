@@ -3,6 +3,6 @@ dist
 *.local
 .DS_Store
 tsconfig.tsbuildinfo
-data/
+/data/
 dist-embedded
 .env
