@@ -1,11 +1,12 @@
 // Runs the API server (tsx watch) and the Vite dev server together.
 import { spawn } from "node:child_process";
 
-// On Windows npx is npx.cmd, which Node can only launch through a shell.
-const opts = { stdio: "inherit", shell: process.platform === "win32" };
+// Run through a shell: on Windows npx is npx.cmd, which needs one. Commands
+// are passed as whole strings (not an args array) to avoid Node's DEP0190.
+const opts = { stdio: "inherit", shell: true };
 const procs = [
-  spawn("npx", ["tsx", "watch", "server/index.ts"], opts),
-  spawn("npx", ["vite"], opts),
+  spawn("npx tsx watch server/index.ts", opts),
+  spawn("npx vite", opts),
 ];
 
 const stop = () => {
