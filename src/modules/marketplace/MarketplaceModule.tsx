@@ -5,17 +5,20 @@ import MarketplaceList from "./MarketplaceList";
 import InfluencerDetailView from "./InfluencerDetailView";
 import CompareView from "./CompareView";
 import TradeModal from "./TradeModal";
+import { BackLevel, useBackLayer } from "../../backButton";
 
 type View = { type: "list" } | { type: "detail"; id: string } | { type: "compare"; ids: string[] };
 
 /** Module 2 — Influencer Marketplace. */
-export default function MarketplaceModule() {
+export default function MarketplaceModule({ visible }: { visible: boolean }) {
   const [overview, setOverview] = useState<MarketplaceOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ type: "list" });
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [trade, setTrade] = useState<{ id: string; type: "invest" | "divest" } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  useBackLayer(visible && view.type !== "list", BackLevel.page, () => setView({ type: "list" }));
+  useBackLayer(visible && trade !== null, BackLevel.dialog, () => setTrade(null));
 
   const reload = useCallback(async () => {
     try {

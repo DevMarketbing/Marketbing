@@ -18,5 +18,7 @@
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <!-- Android 12+: the app icon on the app's page colour. -->
+        <item name="windowSplashScreenBackground">#F8FAFC</item>
     </style>
 </resources>

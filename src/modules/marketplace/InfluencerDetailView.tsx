@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { CampaignAlert, CampaignPayment, CampaignPost, CampaignTask, InfluencerDetail } from "../../types";
 import { api } from "../../api";
 import { Avatar, RatingStars, RoiBadge, TierChip, fmtCount, fmtLakh } from "./bits";
@@ -10,6 +10,7 @@ import {
   ImageIcon,
   PlayIcon,
 } from "../../components/Icons";
+import StatTile from "../../components/StatTile";
 
 type Tab = "tasks" | "payments" | "alerts" | "posts";
 
@@ -107,8 +108,8 @@ export default function InfluencerDetailView({
               </div>
             </div>
           </div>
-          <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            <div className="rounded-xl bg-slate-50 px-4 py-2.5 text-right">
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+            <div className="rounded-xl bg-slate-50 px-4 py-2.5 sm:text-right">
               <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
                 Your investment
               </div>
@@ -163,10 +164,10 @@ export default function InfluencerDetailView({
 
       {/* Metric tiles */}
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MetricTile label="Amount given" value={fmtLakh(view.spendLakh)} sub="campaign payouts" />
-        <MetricTile label="Attributed sales" value={fmtLakh(view.salesLakh)} sub="tracked revenue" />
-        <MetricTile label="ROI" value={<RoiBadge roi={view.roi} className="text-base" />} sub="sales / spend" />
-        <MetricTile
+        <StatTile label="Amount given" value={fmtLakh(view.spendLakh)} sub="campaign payouts" />
+        <StatTile label="Attributed sales" value={fmtLakh(view.salesLakh)} sub="tracked revenue" />
+        <StatTile label="ROI" value={<RoiBadge roi={view.roi} className="text-base" />} sub="sales / spend" />
+        <StatTile
           label="Engagement"
           value={`${view.engagementRate}%`}
           sub={`${fmtCount(view.reach)} reach · ${fmtCount(view.likes)} likes`}
@@ -216,18 +217,6 @@ export default function InfluencerDetailView({
         {tab === "alerts" && <AlertsTab alerts={view.alerts} onResolve={resolveAlert} />}
         {tab === "posts" && <PostsTab posts={view.posts} />}
       </div>
-    </div>
-  );
-}
-
-function MetricTile({ label, value, sub }: { label: string; value: ReactNode; sub: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{label}</div>
-      <div className="mt-1 text-xl font-bold text-slate-900" style={{ fontVariantNumeric: "tabular-nums" }}>
-        {value}
-      </div>
-      <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div>
     </div>
   );
 }
@@ -332,19 +321,19 @@ function PaymentsTab({ payments }: { payments: CampaignPayment[] }) {
       </div>
       <ul className="divide-y divide-slate-100">
         {payments.map((p) => (
-          <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-            <div className="flex items-center gap-3">
-              <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${levelTone[p.level]}`}>
-                {p.level}
-              </span>
-              <div>
-                <div className="text-sm font-medium text-slate-800">{p.label}</div>
-                <div className="text-[11px] text-slate-400">{p.date}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-bold text-slate-900" style={{ fontVariantNumeric: "tabular-nums" }}>
+          <li key={p.id} className="px-5 py-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 text-sm font-medium text-slate-800">{p.label}</span>
+              <span className="shrink-0 text-sm font-bold text-slate-900" style={{ fontVariantNumeric: "tabular-nums" }}>
                 {fmtLakh(p.amountLakh)}
+              </span>
+            </div>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2">
+                <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${levelTone[p.level]}`}>
+                  {p.level}
+                </span>
+                <span className="text-[11px] text-slate-400">{p.date}</span>
               </span>
               <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ${statusTone[p.status]}`}>
                 {p.status}
@@ -370,7 +359,7 @@ function AlertsTab({ alerts, onResolve }: { alerts: CampaignAlert[]; onResolve: 
   const card = (a: CampaignAlert) => (
     <div
       key={a.id}
-      className={`flex items-start gap-3 rounded-xl border p-4 shadow-sm ${
+      className={`grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-3 rounded-xl border p-4 shadow-sm sm:grid-cols-[auto_1fr_auto] ${
         a.resolved
           ? "border-slate-200 bg-slate-50 opacity-60"
           : a.kind === "warning"
@@ -391,12 +380,14 @@ function AlertsTab({ alerts, onResolve }: { alerts: CampaignAlert[]; onResolve: 
       {!a.resolved ? (
         <button
           onClick={() => onResolve(a.id)}
-          className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+          className="col-start-2 justify-self-start rounded-lg sm:col-start-auto border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
         >
           {a.kind === "clarification" ? "Mark answered" : "Resolve"}
         </button>
       ) : (
-        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">Resolved</span>
+        <span className="col-start-2 text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:col-start-auto">
+          Resolved
+        </span>
       )}
     </div>
   );

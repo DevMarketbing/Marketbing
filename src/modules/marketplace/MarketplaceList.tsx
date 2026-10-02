@@ -1,7 +1,8 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import type { InfluencerSummary, MarketplaceOverview } from "../../types";
 import { Avatar, RatingStars, RoiBadge, Sparkline, TierChip, fmtCount, fmtLakh } from "./bits";
 import { AlertIcon, ScaleIcon, SearchIcon, WalletIcon } from "../../components/Icons";
+import StatTile from "../../components/StatTile";
 
 type SortKey = "roi" | "invested" | "rating" | "followers" | "sales";
 
@@ -58,13 +59,13 @@ export default function MarketplaceList({
           </p>
         </div>
         <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:gap-3">
-          <HeaderStat
+          <StatTile compact
             icon={<WalletIcon className="h-4 w-4" />}
             label="Wallet balance"
             value={fmtLakh(overview.wallet.balanceLakh)}
           />
-          <HeaderStat label="Invested" value={fmtLakh(overview.totalInvestedLakh)} />
-          <HeaderStat
+          <StatTile compact label="Invested" value={fmtLakh(overview.totalInvestedLakh)} />
+          <StatTile compact
             label="Portfolio ROI"
             value={<RoiBadge roi={overview.portfolioRoi} className="text-sm" />}
           />
@@ -83,7 +84,8 @@ export default function MarketplaceList({
           />
         </div>
         <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
-          Sort by
+          {/* Hidden on phones so the sort menu and Compare share one line. */}
+          <span className="sr-only sm:not-sr-only">Sort by</span>
           <select
             id="marketplace-sort"
             value={sort}
@@ -258,28 +260,6 @@ export default function MarketplaceList({
             </div>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function HeaderStat({
-  icon,
-  label,
-  value,
-}: {
-  icon?: JSX.Element;
-  label: string;
-  value: ReactNode;
-}) {
-  return (
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:tracking-widest">
-        {icon}
-        {label}
-      </div>
-      <div className="mt-0.5 text-lg font-bold text-slate-900" style={{ fontVariantNumeric: "tabular-nums" }}>
-        {value}
       </div>
     </div>
   );

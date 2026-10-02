@@ -91,37 +91,58 @@ in with the server's owner account):
 export MB_EMAIL=you@example.com MB_PASSWORD=your-owner-password
 node e2e/smoke.mjs [path-to-chromium]         # every flow, desktop size
 node e2e/accounts.mjs [path-to-chromium]      # sign-up, invite, join, remove, password
-node e2e/mobile-width.mjs [path-to-chromium]  # every screen fits a 360px phone
+node e2e/mobile-width.mjs [path-to-chromium]  # every screen fits a phone (WIDTH=360 by default)
+npx tsx e2e/backButton.test.ts                # Android back button order
 ```
 
 ## Android app
 
-`android/` is a native Android project (Capacitor) that wraps the same
-React client. The app has no server of its own: it signs in to and works
-against your hosted server (e.g. the Render deployment), so deploy that
-first.
+The app opens the live site (`https://marketbing.onrender.com`, or
+`ANDROID_SITE_URL`). The site and the app are one product: every deploy to
+Render reaches the app the next time it opens, whether it adds a screen or
+an API integration, with no new app build and no reinstall. The app adds
+what a phone needs on top: its own icon and splash screen, the back button
+stepping back through screens (`src/backButton.ts`), and an offline page
+with a retry button.
 
-One-time setup on your computer: install
-[Android Studio](https://developer.android.com/studio) (it brings the
-Android SDK and Java).
+**Getting the APK.** GitHub builds it (`.github/workflows/android.yml`)
+whenever the app shell changes (`android/`, `capacitor.config.ts`), or on
+demand: GitHub → **Actions** → **Android app** → **Run workflow**. Builds
+of the default branch are published as the **android-latest** release:
+open it on your phone, tap `marketbing.apk` and allow the install. Newer
+builds install over older ones. Ordinary site changes don't need a new APK.
+
+**Google Play.** Change `appId` in `capacitor.config.ts` first (it can't
+change after the first upload). Create an upload key once:
 
 ```bash
-# in .env:  ANDROID_API_URL=https://<your-server>.onrender.com
-npm run build:android   # build the client with that address, copy it into android/
-npm run android         # open the project in Android Studio
+keytool -genkeypair -keystore upload.keystore -alias upload -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 upload.keystore   # copy the output
 ```
 
-In Android Studio, plug in a phone (with USB debugging on) and press Run,
-or use **Build → Build App Bundle(s) / APK(s)**. Re-run
-`npm run build:android` after every change to the web client; the app
-otherwise updates only when you ship a new build.
+and add GitHub secrets (Settings → Secrets and variables → Actions):
+`ANDROID_KEYSTORE_BASE64` (that output), `ANDROID_KEYSTORE_PASSWORD`,
+`ANDROID_KEY_ALIAS` (`upload`) and `ANDROID_KEY_PASSWORD`. The next build
+also produces a signed `.aab` to upload to the Play Console. Keep the
+keystore file safe and out of the repository; losing it means you can't
+update the app.
 
-For Google Play: change `appId` in `capacitor.config.ts` first (it can't
-change after the first upload), replace the default icon (Android Studio:
-right-click `app/src/main/res` → New → Image Asset), raise `versionCode` in
-`android/app/build.gradle` for each release, and upload a signed bundle
-from **Build → Generate Signed App Bundle**. Keep the signing key safe:
-losing it means you can't update the app.
+Working on the shell locally (needs Android Studio): `npm run build:android`
+then `npm run android`. `node scripts/android-images.mjs` regenerates the
+icon and splash images from the logo.
+
+## Adding integrations (Meta, Claude, email, payments)
+
+Integrations belong on the server, never in the browser or the app:
+
+1. Put the key in `.env` (locally) and in Render's Environment page; the
+   slots are already in `.env.example`. Keys never go in `src/`, where
+   anyone could read them from the site or the app.
+2. Call the service from the server: replace the stand-in it is meant for
+   (`shared/planner.ts` for Claude, `shared/seed.ts` for social and sales
+   metrics, the wallet trades for payments) and expose results through
+   `server/index.ts` routes, which are already per-workspace and signed in.
+3. Show it in `src/`. Deploy, and the site and the app both have it.
 
 ## Architecture
 
@@ -155,8 +176,9 @@ src/             React 18 + TypeScript + Tailwind 4 web client
   modules/planning/     Module 1 UI (objective → context → plans → run)
   modules/marketplace/  Module 2 UI (list, detail, compare, trade modal)
   auth/          Sign-in screen and session gate
+  backButton.ts  Android back button: closes the top dialog/page/section
 
-android/         Capacitor Android project (see "Android app")
+android/         Capacitor Android app shell (see "Android app")
 ```
 
 Design decisions worth knowing:

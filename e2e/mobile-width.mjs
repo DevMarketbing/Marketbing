@@ -12,7 +12,7 @@ import { chromium } from "playwright-core";
 const BASE = process.env.BASE_URL ?? "http://localhost:8787";
 const SHOTS = process.env.SHOTS;
 const executablePath = process.argv[2] || process.env.CHROMIUM_PATH || undefined;
-const WIDTH = 360;
+const WIDTH = Number(process.env.WIDTH ?? 360);
 
 const browser = await chromium.launch({ executablePath });
 const page = await browser.newPage({ viewport: { width: WIDTH, height: 780 }, isMobile: true, hasTouch: true });
@@ -45,6 +45,21 @@ async function check(name) {
       const padRight = parseFloat(getComputedStyle(parent).paddingRight) || 0;
       if (r.right > pr.right - padRight + 2) {
         offenders.push(`${describe(el)} → sticks out of its container by ${Math.round(r.right - (pr.right - padRight))}px`);
+      }
+    }
+    // Stat tiles side by side must show their numbers on one line.
+    const rows = new Map();
+    for (const tile of document.querySelectorAll("[data-stat-tile]")) {
+      const r = tile.getBoundingClientRect();
+      if (r.width === 0) continue;
+      const value = tile.querySelector("[data-stat-value]").getBoundingClientRect();
+      const key = Math.round(r.top);
+      rows.set(key, [...(rows.get(key) ?? []), { value: Math.round(value.top), text: tile.textContent }]);
+    }
+    for (const tiles of rows.values()) {
+      const tops = tiles.map((t) => t.value);
+      if (Math.max(...tops) - Math.min(...tops) > 1) {
+        offenders.push(`stat values not level: ${tiles.map((t) => `"${t.text}" at ${t.value}px`).join(", ")}`);
       }
     }
     return { scrollWidth: doc.scrollWidth, offenders: offenders.slice(0, 5) };
@@ -118,6 +133,15 @@ for (const tab of ["Payments", "Alerts", "Posts"]) {
   }
 }
 
+// Compare view (ticks the first three influencers).
+await page.locator("main button:has-text('Marketplace')").first().click();
+await vis("text=Ananya Rao").waitFor({ timeout: 10000 });
+const ticks = page.locator("input[type=checkbox]").locator("visible=true");
+for (let i = 0; i < 3; i++) await ticks.nth(i).check();
+await vis("button:has-text('Compare (3)')").click();
+await vis("text=Attributed sales").waitFor({ timeout: 10000 });
+await check("marketplace-compare");
+
 await menu("Finance");
 await check("finance");
 await menu("Settings");
@@ -133,7 +157,7 @@ await check("account");
 
 await browser.close();
 if (problems.length) {
-  console.error(`\n${problems.length} screen(s) have content that does not fit at ${WIDTH}px:\n  ${problems.join("\n  ")}`);
+  console.error(`\n${problems.length} screen(s) have content that does not fit or line up at ${WIDTH}px:\n  ${problems.join("\n  ")}`);
   process.exit(1);
 }
 console.log(`\nAll screens fit a ${WIDTH}px-wide phone.`);

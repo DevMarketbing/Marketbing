@@ -81,7 +81,8 @@ export default function CompareView({ ids, onBack, onOpen }: CompareViewProps) {
       </p>
 
       {/* Legend / identity */}
-      <div className="mt-5 grid gap-3" style={{ gridTemplateColumns: `repeat(${s.length}, minmax(0, 1fr))` }}>
+      {/* One per line on phones, so full names fit; side by side from sm up. */}
+      <div className={`mt-5 grid grid-cols-1 gap-2 sm:gap-3 ${s.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         {s.map((x, i) => (
           <button
             key={x.profile.id}
@@ -105,7 +106,7 @@ export default function CompareView({ ids, onBack, onOpen }: CompareViewProps) {
           const best = row.invert ? Math.min(...row.values) : Math.max(...row.values);
           return (
             <div key={row.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-baseline justify-between">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <span className="text-xs font-bold uppercase tracking-widest text-slate-500">{row.label}</span>
                 {row.hint && <span className="text-[11px] text-slate-400">{row.hint}</span>}
               </div>

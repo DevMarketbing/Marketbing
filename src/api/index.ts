@@ -36,13 +36,6 @@ export interface ApiClient {
 
 export const EMBEDDED = import.meta.env.VITE_EMBEDDED === "1";
 
-/**
- * Address of the API server. Empty for the web app, which is served by the
- * API server itself; the Android build sets VITE_API_URL to the hosted
- * server (see scripts/build-android.mjs).
- */
-const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
-
 export class HttpError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -73,7 +66,9 @@ function setToken(value: string | null) {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}/api${path}`, {
+    // The site and the Android app are both served by the API server, so
+    // calls go to the same address the page came from.
+    res = await fetch(`/api${path}`, {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -195,10 +190,9 @@ export const team = {
   /** Creates an invite and returns the link to send to the invitee. */
   async invite(email: string): Promise<PendingInvite & { link: string }> {
     const res = await post<PendingInvite & { token: string }>("/team/invites", { email });
-    // The web app is served by the API server, so the link opens it there.
     // After "#", the token is never sent to any server or written to its logs.
-    const site = API_BASE || window.location.origin;
-    return { id: res.id, email: res.email, expiresAt: res.expiresAt, link: `${site}/#invite=${res.token}` };
+    const link = `${window.location.origin}/#invite=${res.token}`;
+    return { id: res.id, email: res.email, expiresAt: res.expiresAt, link };
   },
   async revokeInvite(id: string): Promise<void> {
     await request(`/team/invites/${encodeURIComponent(id)}`, { method: "DELETE" });
