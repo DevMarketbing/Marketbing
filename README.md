@@ -23,7 +23,8 @@ Two modules are live; the third appears in navigation as Coming Soon:
 ## Running it
 
 Before the first start, copy `.env.example` to `.env` and set `OWNER_EMAIL`
-and `OWNER_PASSWORD`: that is the account you sign in with.
+and `OWNER_PASSWORD`: that account owns the default workspace. Anyone else
+creates their own account from the sign-in screen.
 
 ```bash
 npm install
@@ -46,11 +47,20 @@ npm start          # serve API + built client on http://localhost:8787
   `.env` and fill in values; `.env` is gitignored so secrets never reach
   the repository. Integration keys (Claude API, Meta/Instagram, email,
   payments) already have labelled slots for when those integrations land.
-- **Sign-in** — one owner account, set by `OWNER_EMAIL` / `OWNER_PASSWORD`
-  in `.env` and created on start. There is no public sign-up. To change
-  the password, change it in `.env` and restart; every signed-in device is
-  signed out. Ten failed attempts from one address lock it out for 15
-  minutes. The embedded demo build has no server and no sign-in.
+- **Accounts and workspaces** — anyone can sign up (turn it off with
+  `ALLOW_SIGNUP=false`); each new business gets its own private workspace,
+  starting from the `config/` data, and is its owner. Owners invite their
+  team from the **Team** page: it makes a one-time link (valid 7 days) to
+  send by WhatsApp or email, since the app doesn't send email yet. Each
+  account belongs to one workspace; members can use everything except
+  managing the team. Passwords are changed on the **Account** page.
+- **The default workspace** holds the data from before sign-up existed. Its
+  owner is created from `OWNER_EMAIL` / `OWNER_PASSWORD` on first start;
+  `RESET_OWNER_PASSWORD=yes` restores that password if it is lost.
+- **Limits** — ten failed sign-ins from one address lock it out for 15
+  minutes; five sign-ups per address per hour. There is no "forgot
+  password" email yet: an owner can remove and re-invite a team member.
+  The embedded demo build has no server and no sign-in.
 - **Database** — Supabase (hosted Postgres) when `DATABASE_URL` is set in
   `.env`; otherwise a local SQLite file in `data/`. Either way it is created
   and seeded from `config/` on first boot. `npm run db:reset` clears it
@@ -80,6 +90,7 @@ in with the server's owner account):
 ```bash
 export MB_EMAIL=you@example.com MB_PASSWORD=your-owner-password
 node e2e/smoke.mjs [path-to-chromium]         # every flow, desktop size
+node e2e/accounts.mjs [path-to-chromium]      # sign-up, invite, join, remove, password
 node e2e/mobile-width.mjs [path-to-chromium]  # every screen fits a 360px phone
 ```
 
@@ -128,12 +139,12 @@ shared/          Domain layer — shared by server and browser
   seed.ts        Deterministic seed generator for a fresh workspace
 
 server/          Express API
-  index.ts       REST routes: /api/auth/*, /api/planner/*, /api/runs/*, /api/marketplace/*
-  auth.ts        Sign-in: scrypt password hashes, hashed session tokens
-                 (Bearer header), failed-attempt limits, owner from .env
-  pgStore.ts     Postgres/Supabase DataStore; jsonb documents for catalog
-                 data, numeric columns for money and the ledger
-  sqliteStore.ts SQLite DataStore used when DATABASE_URL is unset
+  index.ts       REST routes: /api/auth/*, /api/team/*, /api/planner/*, /api/runs/*,
+                 /api/marketplace/* — each request scoped to the user's workspace
+  auth.ts        Accounts, workspaces, invites: scrypt password hashes, hashed
+                 session and invite tokens (Bearer header), attempt limits
+  pgStore.ts / sqliteStore.ts / jsonStore.ts
+                 Storage for every workspace; every query filters by workspace
   db/            Connection (SSL, friendly errors), versioned SQL
                  migrations applied on boot, and the reset command
 
@@ -168,7 +179,8 @@ Design decisions worth knowing:
 
 ## Current limits (v1)
 
-- Single-tenant with one sign-in account; no team members or roles yet.
+- Two roles only (owner, member); one workspace per account; no password
+  reset by email.
 - Influencer/campaign metrics come from the deterministic seed generator,
   not live social APIs; money movement is ledger-only.
 - The executor simulates step completion by duration; real integrations

@@ -40,6 +40,17 @@ export interface DataStore {
   transaction<T>(fn: (store: DataStore) => Promise<T>): Promise<T>;
 }
 
+/**
+ * Storage for every workspace on the server. Each workspace (one business)
+ * has its own wallet, influencers, campaigns and runs; a DataStore from
+ * forWorkspace() can only see and change that workspace's data.
+ */
+export interface WorkspaceStores {
+  forWorkspace(workspaceId: string): DataStore;
+  /** Fills a workspace that has no data yet. Returns false if it already had some. */
+  seedWorkspace(workspaceId: string, seed: SeedData): Promise<boolean>;
+}
+
 /** In-memory DataStore over a seed snapshot, with an optional persist hook. */
 export class MemoryStore implements DataStore {
   private alerts: Map<string, CampaignAlert>;

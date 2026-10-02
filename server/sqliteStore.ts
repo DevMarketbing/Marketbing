@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import type { DataStore } from "../shared/store";
+import type { DataStore, WorkspaceStores } from "../shared/store";
 import type {
   Campaign,
   CampaignAlert,
@@ -12,103 +12,156 @@ import type {
 } from "../shared/types";
 import type { SeedData } from "../shared/seed";
 
+const TABLES = `
+  CREATE TABLE IF NOT EXISTS products      (workspace_id TEXT NOT NULL, id TEXT NOT NULL, doc TEXT NOT NULL,
+                                            PRIMARY KEY (workspace_id, id));
+  CREATE TABLE IF NOT EXISTS influencers   (workspace_id TEXT NOT NULL, id TEXT NOT NULL, doc TEXT NOT NULL,
+                                            PRIMARY KEY (workspace_id, id));
+  CREATE TABLE IF NOT EXISTS campaigns     (workspace_id TEXT NOT NULL, influencer_id TEXT NOT NULL,
+                                            product_id TEXT NOT NULL, doc TEXT NOT NULL,
+                                            PRIMARY KEY (workspace_id, influencer_id, product_id));
+  CREATE TABLE IF NOT EXISTS alerts        (workspace_id TEXT NOT NULL, id TEXT NOT NULL, influencer_id TEXT NOT NULL,
+                                            resolved INTEGER NOT NULL DEFAULT 0, doc TEXT NOT NULL,
+                                            PRIMARY KEY (workspace_id, id));
+  CREATE TABLE IF NOT EXISTS positions     (workspace_id TEXT NOT NULL, influencer_id TEXT NOT NULL,
+                                            invested_lakh REAL NOT NULL, PRIMARY KEY (workspace_id, influencer_id));
+  CREATE TABLE IF NOT EXISTS transactions  (workspace_id TEXT NOT NULL, id TEXT NOT NULL, at INTEGER NOT NULL,
+                                            doc TEXT NOT NULL, PRIMARY KEY (workspace_id, id));
+  CREATE TABLE IF NOT EXISTS wallet        (workspace_id TEXT PRIMARY KEY, balance_lakh REAL NOT NULL);
+  CREATE TABLE IF NOT EXISTS runs          (workspace_id TEXT NOT NULL, id TEXT NOT NULL, created_at INTEGER NOT NULL,
+                                            doc TEXT NOT NULL, PRIMARY KEY (workspace_id, id));
+  CREATE INDEX IF NOT EXISTS idx_alerts_influencer ON alerts (workspace_id, influencer_id);
+`;
+
+/** Pre-workspace layout: [table, columns copied into the new table]. */
+const LEGACY_TABLES: [string, string][] = [
+  ["products", "id, doc"],
+  ["influencers", "id, doc"],
+  ["campaigns", "influencer_id, product_id, doc"],
+  ["alerts", "id, influencer_id, resolved, doc"],
+  ["positions", "influencer_id, invested_lakh"],
+  ["transactions", "id, at, doc"],
+  ["wallet", "balance_lakh"],
+  ["runs", "id, created_at, doc"],
+];
+
 /**
- * SQLite-backed DataStore.
+ * SQLite-backed storage for all workspaces, used when DATABASE_URL is unset.
  *
  * Catalog entities (influencers, products, campaigns) and documents with
- * deep nesting are stored as JSON documents keyed by id — a deliberate
- * v1 choice that keeps the schema small while remaining queryable via
- * SQLite's JSON functions. Hot mutable scalars (wallet, positions) get
- * real columns. The database file is created and seeded on first boot.
+ * deep nesting are stored as JSON documents keyed by (workspace, id) — a
+ * deliberate v1 choice that keeps the schema small while remaining
+ * queryable via SQLite's JSON functions. Hot mutable scalars (wallet,
+ * positions) get real columns. The database file is created on first boot.
  */
-export class SqliteStore implements DataStore {
+export class SqliteStores implements WorkspaceStores {
   private db: Database.Database;
 
-  constructor(file: string, seed: SeedData) {
+  constructor(file: string) {
     this.db = new Database(file);
     this.db.pragma("journal_mode = WAL");
     this.migrate();
-    this.seedIfEmpty(seed);
   }
-
-  /** True when the database was already populated before this boot. */
-  public wasAlreadySeeded = false;
 
   private migrate() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS products      (id TEXT PRIMARY KEY, doc TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS influencers   (id TEXT PRIMARY KEY, doc TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS campaigns     (influencer_id TEXT NOT NULL, product_id TEXT NOT NULL,
-                                                doc TEXT NOT NULL, PRIMARY KEY (influencer_id, product_id));
-      CREATE TABLE IF NOT EXISTS alerts        (id TEXT PRIMARY KEY, influencer_id TEXT NOT NULL,
-                                                resolved INTEGER NOT NULL DEFAULT 0, doc TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS positions     (influencer_id TEXT PRIMARY KEY, invested_lakh REAL NOT NULL);
-      CREATE TABLE IF NOT EXISTS transactions  (id TEXT PRIMARY KEY, at INTEGER NOT NULL, doc TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS wallet        (id INTEGER PRIMARY KEY CHECK (id = 1), balance_lakh REAL NOT NULL);
-      CREATE TABLE IF NOT EXISTS runs          (id TEXT PRIMARY KEY, created_at INTEGER NOT NULL, doc TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS idx_alerts_influencer ON alerts (influencer_id);
-    `);
+    const hasTable = (name: string) =>
+      this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
+    const columns = (table: string) =>
+      (this.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+    const legacy = hasTable("products") && !columns("products").includes("workspace_id");
+
+    this.db.transaction(() => {
+      // Databases from before workspaces: move every row into "default".
+      if (legacy) {
+        for (const [table] of LEGACY_TABLES) this.db.exec(`ALTER TABLE ${table} RENAME TO legacy_${table}`);
+        this.db.exec("DROP INDEX IF EXISTS idx_alerts_influencer");
+      }
+      this.db.exec(TABLES);
+      if (legacy) {
+        for (const [table, cols] of LEGACY_TABLES) {
+          this.db.exec(
+            `INSERT INTO ${table} (workspace_id, ${cols}) SELECT 'default', ${cols} FROM legacy_${table}; ` +
+              `DROP TABLE legacy_${table};`,
+          );
+        }
+      }
+    })();
   }
 
-  private seedIfEmpty(seed: SeedData) {
-    const count = this.db.prepare("SELECT COUNT(*) AS n FROM influencers").get() as { n: number };
-    if (count.n > 0) {
-      this.wasAlreadySeeded = true;
-      return;
-    }
-    const tx = this.db.transaction(() => {
-      const insProduct = this.db.prepare("INSERT INTO products (id, doc) VALUES (?, ?)");
-      for (const p of seed.products) insProduct.run(p.id, JSON.stringify(p));
-      const insInf = this.db.prepare("INSERT INTO influencers (id, doc) VALUES (?, ?)");
-      for (const i of seed.influencers) insInf.run(i.id, JSON.stringify(i));
+  forWorkspace(workspaceId: string): DataStore {
+    return new SqliteStore(this.db, workspaceId);
+  }
+
+  async seedWorkspace(workspaceId: string, seed: SeedData): Promise<boolean> {
+    const count = this.db
+      .prepare("SELECT COUNT(*) AS n FROM influencers WHERE workspace_id = ?")
+      .get(workspaceId) as { n: number };
+    if (count.n > 0) return false;
+    const ws = workspaceId;
+    this.db.transaction(() => {
+      const insProduct = this.db.prepare("INSERT INTO products (workspace_id, id, doc) VALUES (?, ?, ?)");
+      for (const p of seed.products) insProduct.run(ws, p.id, JSON.stringify(p));
+      const insInf = this.db.prepare("INSERT INTO influencers (workspace_id, id, doc) VALUES (?, ?, ?)");
+      for (const i of seed.influencers) insInf.run(ws, i.id, JSON.stringify(i));
       const insCampaign = this.db.prepare(
-        "INSERT INTO campaigns (influencer_id, product_id, doc) VALUES (?, ?, ?)",
+        "INSERT INTO campaigns (workspace_id, influencer_id, product_id, doc) VALUES (?, ?, ?, ?)",
       );
-      for (const c of seed.campaigns) insCampaign.run(c.influencerId, c.productId, JSON.stringify(c));
+      for (const c of seed.campaigns) insCampaign.run(ws, c.influencerId, c.productId, JSON.stringify(c));
       const insAlert = this.db.prepare(
-        "INSERT INTO alerts (id, influencer_id, resolved, doc) VALUES (?, ?, ?, ?)",
+        "INSERT INTO alerts (workspace_id, id, influencer_id, resolved, doc) VALUES (?, ?, ?, ?, ?)",
       );
-      for (const a of seed.alerts) insAlert.run(a.id, a.influencerId, a.resolved ? 1 : 0, JSON.stringify(a));
-      const insPos = this.db.prepare("INSERT INTO positions (influencer_id, invested_lakh) VALUES (?, ?)");
-      for (const p of seed.positions) insPos.run(p.influencerId, p.investedLakh);
-      const insTx = this.db.prepare("INSERT INTO transactions (id, at, doc) VALUES (?, ?, ?)");
-      for (const t of seed.transactions) insTx.run(t.id, t.at, JSON.stringify(t));
-      this.db.prepare("INSERT INTO wallet (id, balance_lakh) VALUES (1, ?)").run(seed.wallet.balanceLakh);
-    });
-    tx();
+      for (const a of seed.alerts) insAlert.run(ws, a.id, a.influencerId, a.resolved ? 1 : 0, JSON.stringify(a));
+      const insPos = this.db.prepare(
+        "INSERT INTO positions (workspace_id, influencer_id, invested_lakh) VALUES (?, ?, ?)",
+      );
+      for (const p of seed.positions) insPos.run(ws, p.influencerId, p.investedLakh);
+      const insTx = this.db.prepare("INSERT INTO transactions (workspace_id, id, at, doc) VALUES (?, ?, ?, ?)");
+      for (const t of seed.transactions) insTx.run(ws, t.id, t.at, JSON.stringify(t));
+      this.db.prepare("INSERT INTO wallet (workspace_id, balance_lakh) VALUES (?, ?)").run(ws, seed.wallet.balanceLakh);
+    })();
+    return true;
   }
+}
 
+/** One workspace's data; every query is filtered by workspace_id. */
+class SqliteStore implements DataStore {
+  constructor(
+    private db: Database.Database,
+    private ws: string,
+  ) {}
+
+  /** Runs sql with the first ? bound to this workspace. */
   private docs<T>(sql: string, ...params: unknown[]): T[] {
-    return (this.db.prepare(sql).all(...params) as { doc: string }[]).map((r) => JSON.parse(r.doc) as T);
+    return (this.db.prepare(sql).all(this.ws, ...params) as { doc: string }[]).map((r) => JSON.parse(r.doc) as T);
   }
 
   async listProducts(): Promise<Product[]> {
-    return this.docs<Product>("SELECT doc FROM products");
+    return this.docs<Product>("SELECT doc FROM products WHERE workspace_id = ?");
   }
 
   async listInfluencers(): Promise<InfluencerProfile[]> {
-    return this.docs<InfluencerProfile>("SELECT doc FROM influencers");
+    return this.docs<InfluencerProfile>("SELECT doc FROM influencers WHERE workspace_id = ?");
   }
 
   async listCampaigns(): Promise<Campaign[]> {
-    return this.docs<Campaign>("SELECT doc FROM campaigns");
+    return this.docs<Campaign>("SELECT doc FROM campaigns WHERE workspace_id = ?");
   }
 
   async listAlerts(): Promise<CampaignAlert[]> {
-    return this.docs<CampaignAlert>("SELECT doc FROM alerts");
+    return this.docs<CampaignAlert>("SELECT doc FROM alerts WHERE workspace_id = ?");
   }
 
   async saveAlert(alert: CampaignAlert): Promise<void> {
     this.db
       .prepare(
-        "INSERT INTO alerts (id, influencer_id, resolved, doc) VALUES (@id, @inf, @res, @doc) " +
-          "ON CONFLICT(id) DO UPDATE SET resolved = @res, doc = @doc",
+        "INSERT INTO alerts (workspace_id, id, influencer_id, resolved, doc) VALUES (@ws, @id, @inf, @res, @doc) " +
+          "ON CONFLICT(workspace_id, id) DO UPDATE SET resolved = @res, doc = @doc",
       )
-      .run({ id: alert.id, inf: alert.influencerId, res: alert.resolved ? 1 : 0, doc: JSON.stringify(alert) });
+      .run({ ws: this.ws, id: alert.id, inf: alert.influencerId, res: alert.resolved ? 1 : 0, doc: JSON.stringify(alert) });
   }
 
   async getWallet(): Promise<Wallet> {
-    const row = this.db.prepare("SELECT balance_lakh FROM wallet WHERE id = 1").get() as
+    const row = this.db.prepare("SELECT balance_lakh FROM wallet WHERE workspace_id = ?").get(this.ws) as
       | { balance_lakh: number }
       | undefined;
     return { balanceLakh: row?.balance_lakh ?? 0 };
@@ -117,13 +170,14 @@ export class SqliteStore implements DataStore {
   async saveWallet(wallet: Wallet): Promise<void> {
     this.db
       .prepare(
-        "INSERT INTO wallet (id, balance_lakh) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET balance_lakh = excluded.balance_lakh",
+        "INSERT INTO wallet (workspace_id, balance_lakh) VALUES (?, ?) " +
+          "ON CONFLICT(workspace_id) DO UPDATE SET balance_lakh = excluded.balance_lakh",
       )
-      .run(wallet.balanceLakh);
+      .run(this.ws, wallet.balanceLakh);
   }
 
   async listPositions(): Promise<Position[]> {
-    return (this.db.prepare("SELECT influencer_id, invested_lakh FROM positions").all() as {
+    return (this.db.prepare("SELECT influencer_id, invested_lakh FROM positions WHERE workspace_id = ?").all(this.ws) as {
       influencer_id: string;
       invested_lakh: number;
     }[]).map((r) => ({ influencerId: r.influencer_id, investedLakh: r.invested_lakh }));
@@ -132,31 +186,36 @@ export class SqliteStore implements DataStore {
   async savePosition(position: Position): Promise<void> {
     this.db
       .prepare(
-        "INSERT INTO positions (influencer_id, invested_lakh) VALUES (?, ?) " +
-          "ON CONFLICT(influencer_id) DO UPDATE SET invested_lakh = excluded.invested_lakh",
+        "INSERT INTO positions (workspace_id, influencer_id, invested_lakh) VALUES (?, ?, ?) " +
+          "ON CONFLICT(workspace_id, influencer_id) DO UPDATE SET invested_lakh = excluded.invested_lakh",
       )
-      .run(position.influencerId, position.investedLakh);
+      .run(this.ws, position.influencerId, position.investedLakh);
   }
 
   async listTransactions(): Promise<Transaction[]> {
-    return this.docs<Transaction>("SELECT doc FROM transactions ORDER BY at DESC");
+    return this.docs<Transaction>("SELECT doc FROM transactions WHERE workspace_id = ? ORDER BY at DESC");
   }
 
   async addTransaction(tx: Transaction): Promise<void> {
-    this.db.prepare("INSERT INTO transactions (id, at, doc) VALUES (?, ?, ?)").run(tx.id, tx.at, JSON.stringify(tx));
+    this.db
+      .prepare("INSERT INTO transactions (workspace_id, id, at, doc) VALUES (?, ?, ?, ?)")
+      .run(this.ws, tx.id, tx.at, JSON.stringify(tx));
   }
 
   async getRun(id: string): Promise<RunRecord | null> {
-    const row = this.db.prepare("SELECT doc FROM runs WHERE id = ?").get(id) as { doc: string } | undefined;
+    const row = this.db.prepare("SELECT doc FROM runs WHERE workspace_id = ? AND id = ?").get(this.ws, id) as
+      | { doc: string }
+      | undefined;
     return row ? (JSON.parse(row.doc) as RunRecord) : null;
   }
 
   async saveRun(run: RunRecord): Promise<void> {
     this.db
       .prepare(
-        "INSERT INTO runs (id, created_at, doc) VALUES (@id, @at, @doc) ON CONFLICT(id) DO UPDATE SET doc = @doc",
+        "INSERT INTO runs (workspace_id, id, created_at, doc) VALUES (@ws, @id, @at, @doc) " +
+          "ON CONFLICT(workspace_id, id) DO UPDATE SET doc = @doc",
       )
-      .run({ id: run.id, at: run.createdAt, doc: JSON.stringify(run) });
+      .run({ ws: this.ws, id: run.id, at: run.createdAt, doc: JSON.stringify(run) });
   }
 
   // Store calls never wait on I/O, so no other request can run between BEGIN and COMMIT.

@@ -128,24 +128,55 @@ function createHttpClient(): ApiClient {
   };
 }
 
-/** Sign-in against the API server. Not used by the embedded demo, which has no server. */
+export interface SessionUser {
+  email: string;
+  role: "owner" | "member";
+  workspaceName: string;
+}
+
+export interface TeamMember {
+  id: string;
+  email: string;
+  role: "owner" | "member";
+}
+
+export interface PendingInvite {
+  id: string;
+  email: string;
+  expiresAt: number;
+}
+
+const post = <T>(path: string, body?: unknown) =>
+  request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) });
+
+/** Accounts and sign-in against the API server. Not used by the embedded demo, which has no server. */
 export const auth = {
   required: !EMBEDDED,
   hasSession: () => token !== null,
-  async signIn(email: string, password: string): Promise<string> {
-    const res = await request<{ token: string; email: string }>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-    setToken(res.token);
-    return res.email;
+  /** Whether this server lets new businesses sign up. */
+  async signupAllowed(): Promise<boolean> {
+    return (await request<{ signup: boolean }>("/auth/options")).signup;
   },
-  async currentUser(): Promise<string> {
-    return (await request<{ email: string }>("/auth/me")).email;
+  async signIn(email: string, password: string): Promise<void> {
+    setToken((await post<{ token: string }>("/auth/login", { email, password })).token);
+  },
+  async signUp(email: string, password: string, workspaceName: string): Promise<void> {
+    setToken((await post<{ token: string }>("/auth/signup", { email, password, workspaceName })).token);
+  },
+  /** Who an invite link is for, or an error if it is invalid or expired. */
+  async lookupInvite(inviteToken: string): Promise<{ email: string; workspaceName: string }> {
+    return post("/auth/invite", { token: inviteToken });
+  },
+  async acceptInvite(inviteToken: string, password: string): Promise<void> {
+    setToken((await post<{ token: string }>("/auth/invite/accept", { token: inviteToken, password })).token);
+  },
+  currentUser: () => request<SessionUser>("/auth/me"),
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await post("/auth/password", { currentPassword, newPassword });
   },
   async signOut(): Promise<void> {
     try {
-      await request("/auth/logout", { method: "POST" });
+      await post("/auth/logout");
     } catch {
       /* already signed out on the server, or offline — forget the token either way */
     }
@@ -155,6 +186,25 @@ export const auth = {
   onSignedOut(fn: () => void): () => void {
     signedOutListeners.add(fn);
     return () => signedOutListeners.delete(fn);
+  },
+};
+
+/** The workspace's team; inviting and removing people is for the owner only. */
+export const team = {
+  list: () => request<{ members: TeamMember[]; invites: PendingInvite[] }>("/team"),
+  /** Creates an invite and returns the link to send to the invitee. */
+  async invite(email: string): Promise<PendingInvite & { link: string }> {
+    const res = await post<PendingInvite & { token: string }>("/team/invites", { email });
+    // The web app is served by the API server, so the link opens it there.
+    // After "#", the token is never sent to any server or written to its logs.
+    const site = API_BASE || window.location.origin;
+    return { id: res.id, email: res.email, expiresAt: res.expiresAt, link: `${site}/#invite=${res.token}` };
+  },
+  async revokeInvite(id: string): Promise<void> {
+    await request(`/team/invites/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  async removeMember(id: string): Promise<void> {
+    await request(`/team/members/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 };
 

@@ -67,6 +67,10 @@ const menu = async (label) => {
 await page.goto(BASE);
 await page.waitForSelector("#login-email");
 await check("sign-in");
+await page.click("text=Create an account");
+await page.waitForSelector("#signup-workspace");
+await check("sign-up");
+await page.click("button:has-text('Sign in') >> nth=-1");
 await page.fill("#login-email", process.env.MB_EMAIL ?? "");
 await page.fill("#login-password", process.env.MB_PASSWORD ?? "");
 await page.click("button:has-text('Sign in')");
@@ -118,6 +122,12 @@ await menu("Finance");
 await check("finance");
 await menu("Settings");
 await check("settings");
+await menu("Team");
+await page.waitForSelector("text=Invite a teammate");
+await page.fill("#invite-email", `width-${Date.now()}@example.com`);
+await page.click("button:has-text('Create invite link')");
+await page.waitForSelector("#invite-link");
+await check("team");
 await menu("Account");
 await check("account");
 
