@@ -83,6 +83,35 @@ node e2e/smoke.mjs [path-to-chromium]         # every flow, desktop size
 node e2e/mobile-width.mjs [path-to-chromium]  # every screen fits a 360px phone
 ```
 
+## Android app
+
+`android/` is a native Android project (Capacitor) that wraps the same
+React client. The app has no server of its own: it signs in to and works
+against your hosted server (e.g. the Render deployment), so deploy that
+first.
+
+One-time setup on your computer: install
+[Android Studio](https://developer.android.com/studio) (it brings the
+Android SDK and Java).
+
+```bash
+# in .env:  ANDROID_API_URL=https://<your-server>.onrender.com
+npm run build:android   # build the client with that address, copy it into android/
+npm run android         # open the project in Android Studio
+```
+
+In Android Studio, plug in a phone (with USB debugging on) and press Run,
+or use **Build → Build App Bundle(s) / APK(s)**. Re-run
+`npm run build:android` after every change to the web client; the app
+otherwise updates only when you ship a new build.
+
+For Google Play: change `appId` in `capacitor.config.ts` first (it can't
+change after the first upload), replace the default icon (Android Studio:
+right-click `app/src/main/res` → New → Image Asset), raise `versionCode` in
+`android/app/build.gradle` for each release, and upload a signed bundle
+from **Build → Generate Signed App Bundle**. Keep the signing key safe:
+losing it means you can't update the app.
+
 ## Architecture
 
 ```
@@ -114,6 +143,9 @@ src/             React 18 + TypeScript + Tailwind 4 web client
                  localStorage, used for the hosted demo: VITE_EMBEDDED=1)
   modules/planning/     Module 1 UI (objective → context → plans → run)
   modules/marketplace/  Module 2 UI (list, detail, compare, trade modal)
+  auth/          Sign-in screen and session gate
+
+android/         Capacitor Android project (see "Android app")
 ```
 
 Design decisions worth knowing:

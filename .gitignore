@@ -6,3 +6,4 @@ tsconfig.tsbuildinfo
 /data/
 dist-embedded
 .env
+dist-android

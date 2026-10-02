@@ -10,6 +10,8 @@
     "dev:web": "vite",
     "build": "tsc -b && tsc -p server && vite build",
     "build:embedded": "tsc -b && VITE_EMBEDDED=1 vite build --outDir dist-embedded",
+    "build:android": "node scripts/build-android.mjs",
+    "android": "npx cap open android",
     "start": "tsx server/index.ts",
     "preview": "vite preview",
     "db:reset": "tsx server/db/reset.ts"
@@ -23,6 +25,9 @@
     "tsx": "^4.23.13"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
     "@tailwindcss/vite": "^4.1.4",
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
