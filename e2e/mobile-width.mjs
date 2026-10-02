@@ -4,7 +4,8 @@
  * Wide tables that scroll inside their own box are fine.
  *
  * Prereqs: same as smoke.mjs. Optional SHOTS=dir saves a screenshot per screen.
- * Usage: node e2e/mobile-width.mjs [chromium-executable-path]
+ * Signs in with MB_EMAIL / MB_PASSWORD, like smoke.mjs.
+ * Usage: MB_EMAIL=… MB_PASSWORD=… node e2e/mobile-width.mjs [chromium-executable-path]
  */
 import { chromium } from "playwright-core";
 
@@ -63,13 +64,12 @@ const menu = async (label) => {
   await vis(`aside >> text=${label}`).click();
 };
 
-if (process.env.MB_EMAIL) {
-  await page.goto(BASE);
-  await page.fill("#login-email", process.env.MB_EMAIL);
-  await page.fill("#login-password", process.env.MB_PASSWORD ?? "");
-  await page.click("button:has-text('Sign in')");
-}
 await page.goto(BASE);
+await page.waitForSelector("#login-email");
+await check("sign-in");
+await page.fill("#login-email", process.env.MB_EMAIL ?? "");
+await page.fill("#login-password", process.env.MB_PASSWORD ?? "");
+await page.click("button:has-text('Sign in')");
 await page.waitForSelector("text=What do you want to achieve?");
 await check("planning-objective");
 

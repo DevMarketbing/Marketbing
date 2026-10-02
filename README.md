@@ -22,6 +22,9 @@ Two modules are live; the third appears in navigation as Coming Soon:
 
 ## Running it
 
+Before the first start, copy `.env.example` to `.env` and set `OWNER_EMAIL`
+and `OWNER_PASSWORD`: that is the account you sign in with.
+
 ```bash
 npm install
 npm run dev        # API server (:8787, tsx watch) + Vite dev server together
@@ -43,6 +46,11 @@ npm start          # serve API + built client on http://localhost:8787
   `.env` and fill in values; `.env` is gitignored so secrets never reach
   the repository. Integration keys (Claude API, Meta/Instagram, email,
   payments) already have labelled slots for when those integrations land.
+- **Sign-in** — one owner account, set by `OWNER_EMAIL` / `OWNER_PASSWORD`
+  in `.env` and created on start. There is no public sign-up. To change
+  the password, change it in `.env` and restart; every signed-in device is
+  signed out. Ten failed attempts from one address lock it out for 15
+  minutes. The embedded demo build has no server and no sign-in.
 - **Database** — Supabase (hosted Postgres) when `DATABASE_URL` is set in
   `.env`; otherwise a local SQLite file in `data/`. Either way it is created
   and seeded from `config/` on first boot. `npm run db:reset` clears it
@@ -66,10 +74,13 @@ The tables live in a schema called `marketbing` (pick it from the schema
 menu in Supabase's Table Editor). It is deliberately not the `public`
 schema, which Supabase publishes through its public REST API.
 
-End-to-end smoke test (needs a built client and the server running):
+End-to-end tests (need a built client and the server running; they sign
+in with the server's owner account):
 
 ```bash
-node e2e/smoke.mjs [path-to-chromium]
+export MB_EMAIL=you@example.com MB_PASSWORD=your-owner-password
+node e2e/smoke.mjs [path-to-chromium]         # every flow, desktop size
+node e2e/mobile-width.mjs [path-to-chromium]  # every screen fits a 360px phone
 ```
 
 ## Architecture
@@ -88,7 +99,9 @@ shared/          Domain layer — shared by server and browser
   seed.ts        Deterministic seed generator for a fresh workspace
 
 server/          Express API
-  index.ts       REST routes: /api/planner/*, /api/runs/*, /api/marketplace/*
+  index.ts       REST routes: /api/auth/*, /api/planner/*, /api/runs/*, /api/marketplace/*
+  auth.ts        Sign-in: scrypt password hashes, hashed session tokens
+                 (Bearer header), failed-attempt limits, owner from .env
   pgStore.ts     Postgres/Supabase DataStore; jsonb documents for catalog
                  data, numeric columns for money and the ledger
   sqliteStore.ts SQLite DataStore used when DATABASE_URL is unset
@@ -123,7 +136,7 @@ Design decisions worth knowing:
 
 ## Current limits (v1)
 
-- Single-tenant, no authentication — add auth before exposing publicly.
+- Single-tenant with one sign-in account; no team members or roles yet.
 - Influencer/campaign metrics come from the deterministic seed generator,
   not live social APIs; money movement is ledger-only.
 - The executor simulates step completion by duration; real integrations

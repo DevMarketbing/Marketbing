@@ -12,3 +12,8 @@ if (fs.existsSync(envFile)) process.loadEnvFile(envFile);
 export function jsonFallbackFile(dbFile: string): string {
   return dbFile.replace(/\.db$/, "") + ".json";
 }
+
+/** Where sign-in accounts and sessions are kept alongside the JSON fallback store. */
+export function authFallbackFile(dbFile: string): string {
+  return dbFile.replace(/\.db$/, "") + ".auth.json";
+}

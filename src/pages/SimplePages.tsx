@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { UserIcon } from "../components/Icons";
+import { useSession } from "../auth/AuthGate";
 
 /** Minimal Settings / Account pages — demo placeholders with no real state. */
 
@@ -30,6 +32,8 @@ export function SettingsPage() {
 }
 
 export function AccountPage() {
+  const { email, signOut } = useSession();
+  const [signingOut, setSigningOut] = useState(false);
   return (
     <div className="mx-auto max-w-2xl animate-fade-up px-4 py-10 sm:px-8">
       <h1 className="text-2xl font-bold tracking-tight text-slate-900">Account</h1>
@@ -37,8 +41,8 @@ export function AccountPage() {
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-500">
           <UserIcon className="h-6 w-6" />
         </span>
-        <div>
-          <div className="text-sm font-semibold text-slate-900">Demo User</div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-slate-900">{email ?? "Demo User"}</div>
           <div className="text-sm text-slate-500">Owner · NovaSkin (Demo Workspace)</div>
         </div>
       </div>
@@ -47,6 +51,18 @@ export function AccountPage() {
         <Row label="Role" value="Business Owner" />
         <Row label="Notifications" value="Approvals only" />
       </div>
+      {email && (
+        <button
+          onClick={() => {
+            setSigningOut(true);
+            void signOut();
+          }}
+          disabled={signingOut}
+          className="mt-4 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60 sm:w-auto"
+        >
+          {signingOut ? "Signing out…" : "Sign out"}
+        </button>
+      )}
     </div>
   );
 }

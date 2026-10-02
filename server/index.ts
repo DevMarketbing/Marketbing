@@ -1,4 +1,4 @@
-import { ROOT, jsonFallbackFile } from "./env";
+import { ROOT, authFallbackFile, jsonFallbackFile } from "./env";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
@@ -7,6 +7,7 @@ import { PgStore } from "./pgStore";
 import { createPool, describeTarget, explainDbError, migrate } from "./db/postgres";
 import { MemoryStore, type DataStore, type MutableState } from "../shared/store";
 import { loadSeedOverrides } from "./config";
+import { createAuth, ensureOwner, JsonAuthStore, PgAuthStore, SqliteAuthStore, type AuthStore } from "./auth";
 import { generateSeed } from "../shared/seed";
 import { analyzeObjective, generatePlans } from "../shared/planner";
 import {
@@ -25,6 +26,15 @@ const PORT = Number(process.env.PORT ?? 8787);
 const DB_FILE = process.env.DB_FILE ?? path.join(ROOT, "data", "marketbing.db");
 const CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(ROOT, "config");
 const DATABASE_URL = process.env.DATABASE_URL?.trim();
+const OWNER_EMAIL = process.env.OWNER_EMAIL?.trim();
+const OWNER_PASSWORD = process.env.OWNER_PASSWORD ?? "";
+// Web pages allowed to call the API from another origin: the Android app
+// (Capacitor serves it from https://localhost) plus anything in CORS_ORIGINS.
+const CORS_ORIGINS = new Set(
+  ["https://localhost", "http://localhost", "capacitor://localhost", ...(process.env.CORS_ORIGINS ?? "").split(",")]
+    .map((o) => o.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+);
 
 // Editable workspace data (products, influencers, wallet) comes from config/.
 let overrides;
@@ -37,6 +47,7 @@ try {
 
 const seed = generateSeed(undefined, overrides);
 let store: DataStore;
+let authStore: AuthStore;
 let dbLabel: string;
 let seeded: boolean;
 
@@ -47,6 +58,7 @@ if (DATABASE_URL) {
     const applied = await migrate(pool);
     if (applied.length) console.log(`Database schema updated: ${applied.join(", ")}`);
     ({ store, seeded } = await PgStore.open(pool, seed));
+    authStore = new PgAuthStore(pool);
   } catch (e) {
     console.error(`\nCould not connect to the database (${dbLabel}):\n  ${explainDbError(e)}\n`);
     process.exit(1);
@@ -57,6 +69,7 @@ if (DATABASE_URL) {
     const sqlite = new SqliteStore(DB_FILE, seed);
     dbLabel = `SQLite ${DB_FILE}`;
     store = sqlite;
+    authStore = new SqliteAuthStore(DB_FILE);
     seeded = !sqlite.wasAlreadySeeded;
   } catch (e) {
     // Runtimes that cannot load native addons (e.g. StackBlitz WebContainers)
@@ -67,6 +80,7 @@ if (DATABASE_URL) {
     let saved: MutableState | undefined;
     if (fs.existsSync(jsonFile)) saved = JSON.parse(fs.readFileSync(jsonFile, "utf8")) as MutableState;
     store = new MemoryStore(seed, saved, (state) => fs.writeFileSync(jsonFile, JSON.stringify(state)));
+    authStore = new JsonAuthStore(authFallbackFile(DB_FILE));
     dbLabel = `JSON ${jsonFile}`;
     seeded = !saved;
   }
@@ -77,7 +91,43 @@ console.log(
     : "Using the existing database — edits to the config/ folder apply after `npm run db:reset`.",
 );
 
+let ownerConfigured = false;
+if (OWNER_EMAIL || OWNER_PASSWORD) {
+  try {
+    console.log(await ensureOwner(authStore, OWNER_EMAIL ?? "", OWNER_PASSWORD));
+    ownerConfigured = true;
+  } catch (e) {
+    console.error(`\nCannot set up sign-in: ${(e as Error).message}\nFix OWNER_EMAIL / OWNER_PASSWORD in .env and start the server again.\n`);
+    process.exit(1);
+  }
+} else {
+  console.warn(
+    "\nNo sign-in account configured: set OWNER_EMAIL and OWNER_PASSWORD in .env (see .env.example).\n" +
+      "Until then nobody can sign in, and the app's data stays locked.\n",
+  );
+}
+const auth = createAuth(authStore, { ownerConfigured });
+
 const app = express();
+// Behind a hosting proxy (e.g. Render), TRUST_PROXY=1 makes req.ip the
+// visitor's address, so failed sign-ins are limited per visitor.
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+
+app.use("/api", (req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Max-Age", "600");
+  }
+  res.setHeader("Vary", "Origin");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
 app.use(express.json({ limit: "256kb" }));
 
 /* Minimal request log. */
@@ -93,6 +143,10 @@ const api = express.Router();
 api.get("/health", (_req, res) => {
   res.json({ ok: true, service: "marketbing-api" });
 });
+
+/* Sign-in routes are public; everything registered after this needs a session. */
+api.use(auth.router);
+api.use(auth.requireAuth);
 
 /* ---------------------------- Module 1 ---------------------------- */
 
