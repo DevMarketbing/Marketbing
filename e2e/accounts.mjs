@@ -70,7 +70,7 @@ await staff.fill("#invite-password", "staff-password-1");
 await staff.click("button:has-text('Join workspace')");
 await staff.waitForSelector("text=What do you want to achieve?", { timeout: 10000 });
 await vis(staff, "aside >> text=Influencer Marketplace").click();
-const wallet = await vis(staff, "text=Wallet balance").locator("xpath=..").textContent();
+const wallet = await vis(staff, "[data-stat-tile]:has-text('Wallet balance')").textContent();
 if (!wallet?.includes("₹6L")) throw new Error("teammate sees a different wallet: " + wallet);
 ok("teammate joined and shares the workspace wallet (₹6L)");
 

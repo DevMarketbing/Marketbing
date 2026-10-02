@@ -4,6 +4,7 @@ import { api } from "../../api";
 import { groupSteps } from "./workflowLayout";
 import { poLines } from "../../data/planningContent";
 import { AlertIcon, CheckIcon, ClockIcon, SparkIcon } from "../../components/Icons";
+import StatTile from "../../components/StatTile";
 
 interface ExecutionViewProps {
   runId: string;
@@ -376,8 +377,31 @@ function ApprovalCard({
       <div className="px-5 py-4">
         {isPO ? (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[480px] text-left text-sm">
+            {/* Phones: one card per PO, so no column is cut off. */}
+            <div className="sm:hidden">
+              <div className="divide-y divide-slate-100">
+                {poLines.map((inf) => (
+                  <div key={inf.id} className="py-3 first:pt-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <div className="min-w-0 font-semibold text-slate-800">{inf.name}</div>
+                      <div className="shrink-0 font-semibold text-slate-800">₹{inf.poAmountLakh}L</div>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {inf.handle} · {inf.niche}
+                    </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      {inf.followers} followers · {inf.engagement} engagement · {inf.deliverables}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-baseline justify-between border-t-2 border-slate-200 pt-2.5">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total commitment</span>
+                <span className="text-base font-bold text-slate-900">₹{poTotal.toFixed(1)}L</span>
+              </div>
+            </div>
+            <div className="hidden sm:block">
+              <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
                     <th className="pb-2 pr-3">Influencer</th>
@@ -516,22 +540,10 @@ function ExecutionStats({
       <StatTile label={labels.a} value={contacted} />
       <StatTile
         label={labels.b}
+        icon={responsesRunning ? <SparkIcon className="h-3 w-3 text-indigo-400 animate-soft-pulse" /> : undefined}
         value={responses > 0 ? responses.toLocaleString("en-IN") : "—"}
-        live={responsesRunning}
       />
       <StatTile label={labels.c} value={accepted} />
-    </div>
-  );
-}
-
-function StatTile({ label, value, live }: { label: string; value: string; live?: boolean }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-        {label}
-        {live && <SparkIcon className="h-3 w-3 text-indigo-400 animate-soft-pulse" />}
-      </div>
-      <div className="mt-1 text-xl font-bold text-slate-900">{value}</div>
     </div>
   );
 }

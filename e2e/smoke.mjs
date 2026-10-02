@@ -86,7 +86,7 @@ await page.waitForSelector("text=Ananya Rao");
 ok("marketplace list loads");
 
 // Invest flow with validation
-const walletBefore = await vis("text=Wallet balance").locator("xpath=..").textContent();
+const walletBefore = await vis("[data-stat-tile]:has-text('Wallet balance')").textContent();
 await page.locator("button:has-text('Invest')").first().click();
 await page.waitForSelector("#trade-amount");
 await page.fill("#trade-amount", "2");

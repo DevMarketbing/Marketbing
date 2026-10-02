@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { BusinessContext, ContextField } from "../../types";
 import { historicalSpend } from "../../../shared/planner";
 import { ArrowLeftIcon, ArrowRightIcon, SparkIcon } from "../../components/Icons";
+import AutoTextarea from "../../components/AutoTextarea";
 
 interface ContextFormProps {
   objective: string;
@@ -71,7 +72,7 @@ export default function ContextForm({ objective, note, fields, onBack, onSubmit 
             <label className="mt-1.5 block text-sm font-semibold text-slate-800">{f.label}</label>
             {f.helper && <p className="mt-0.5 text-xs text-slate-400">{f.helper}</p>}
             {f.type === "textarea" ? (
-              <textarea
+              <AutoTextarea
                 value={values[f.id]}
                 onChange={(e) => setValues((v) => ({ ...v, [f.id]: e.target.value }))}
                 rows={2}
