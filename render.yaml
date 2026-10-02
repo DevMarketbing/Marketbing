@@ -21,3 +21,11 @@ services:
       # Supabase's public root CA (committed), so the TLS connection is verified.
       - key: DATABASE_CA_CERT
         value: ./supabase-ca.crt
+      # The sign-in account (see .env.example). Entered in the Render dashboard.
+      - key: OWNER_EMAIL
+        sync: false
+      - key: OWNER_PASSWORD
+        sync: false
+      # Render's proxy sits in front of the app; see TRUST_PROXY in .env.example.
+      - key: TRUST_PROXY
+        value: "1"

@@ -22,6 +22,10 @@ Two modules are live; the third appears in navigation as Coming Soon:
 
 ## Running it
 
+Before the first start, copy `.env.example` to `.env` and set `OWNER_EMAIL`
+and `OWNER_PASSWORD`: that account owns the default workspace. Anyone else
+creates their own account from the sign-in screen.
+
 ```bash
 npm install
 npm run dev        # API server (:8787, tsx watch) + Vite dev server together
@@ -43,6 +47,20 @@ npm start          # serve API + built client on http://localhost:8787
   `.env` and fill in values; `.env` is gitignored so secrets never reach
   the repository. Integration keys (Claude API, Meta/Instagram, email,
   payments) already have labelled slots for when those integrations land.
+- **Accounts and workspaces** — anyone can sign up (turn it off with
+  `ALLOW_SIGNUP=false`); each new business gets its own private workspace,
+  starting from the `config/` data, and is its owner. Owners invite their
+  team from the **Team** page: it makes a one-time link (valid 7 days) to
+  send by WhatsApp or email, since the app doesn't send email yet. Each
+  account belongs to one workspace; members can use everything except
+  managing the team. Passwords are changed on the **Account** page.
+- **The default workspace** holds the data from before sign-up existed. Its
+  owner is created from `OWNER_EMAIL` / `OWNER_PASSWORD` on first start;
+  `RESET_OWNER_PASSWORD=yes` restores that password if it is lost.
+- **Limits** — ten failed sign-ins from one address lock it out for 15
+  minutes; five sign-ups per address per hour. There is no "forgot
+  password" email yet: an owner can remove and re-invite a team member.
+  The embedded demo build has no server and no sign-in.
 - **Database** — Supabase (hosted Postgres) when `DATABASE_URL` is set in
   `.env`; otherwise a local SQLite file in `data/`. Either way it is created
   and seeded from `config/` on first boot. `npm run db:reset` clears it
@@ -66,11 +84,44 @@ The tables live in a schema called `marketbing` (pick it from the schema
 menu in Supabase's Table Editor). It is deliberately not the `public`
 schema, which Supabase publishes through its public REST API.
 
-End-to-end smoke test (needs a built client and the server running):
+End-to-end tests (need a built client and the server running; they sign
+in with the server's owner account):
 
 ```bash
-node e2e/smoke.mjs [path-to-chromium]
+export MB_EMAIL=you@example.com MB_PASSWORD=your-owner-password
+node e2e/smoke.mjs [path-to-chromium]         # every flow, desktop size
+node e2e/accounts.mjs [path-to-chromium]      # sign-up, invite, join, remove, password
+node e2e/mobile-width.mjs [path-to-chromium]  # every screen fits a 360px phone
 ```
+
+## Android app
+
+`android/` is a native Android project (Capacitor) that wraps the same
+React client. The app has no server of its own: it signs in to and works
+against your hosted server (e.g. the Render deployment), so deploy that
+first.
+
+One-time setup on your computer: install
+[Android Studio](https://developer.android.com/studio) (it brings the
+Android SDK and Java).
+
+```bash
+# in .env:  ANDROID_API_URL=https://<your-server>.onrender.com
+npm run build:android   # build the client with that address, copy it into android/
+npm run android         # open the project in Android Studio
+```
+
+In Android Studio, plug in a phone (with USB debugging on) and press Run,
+or use **Build → Build App Bundle(s) / APK(s)**. Re-run
+`npm run build:android` after every change to the web client; the app
+otherwise updates only when you ship a new build.
+
+For Google Play: change `appId` in `capacitor.config.ts` first (it can't
+change after the first upload), replace the default icon (Android Studio:
+right-click `app/src/main/res` → New → Image Asset), raise `versionCode` in
+`android/app/build.gradle` for each release, and upload a signed bundle
+from **Build → Generate Signed App Bundle**. Keep the signing key safe:
+losing it means you can't update the app.
 
 ## Architecture
 
@@ -88,10 +139,12 @@ shared/          Domain layer — shared by server and browser
   seed.ts        Deterministic seed generator for a fresh workspace
 
 server/          Express API
-  index.ts       REST routes: /api/planner/*, /api/runs/*, /api/marketplace/*
-  pgStore.ts     Postgres/Supabase DataStore; jsonb documents for catalog
-                 data, numeric columns for money and the ledger
-  sqliteStore.ts SQLite DataStore used when DATABASE_URL is unset
+  index.ts       REST routes: /api/auth/*, /api/team/*, /api/planner/*, /api/runs/*,
+                 /api/marketplace/* — each request scoped to the user's workspace
+  auth.ts        Accounts, workspaces, invites: scrypt password hashes, hashed
+                 session and invite tokens (Bearer header), attempt limits
+  pgStore.ts / sqliteStore.ts / jsonStore.ts
+                 Storage for every workspace; every query filters by workspace
   db/            Connection (SSL, friendly errors), versioned SQL
                  migrations applied on boot, and the reset command
 
@@ -101,6 +154,9 @@ src/             React 18 + TypeScript + Tailwind 4 web client
                  localStorage, used for the hosted demo: VITE_EMBEDDED=1)
   modules/planning/     Module 1 UI (objective → context → plans → run)
   modules/marketplace/  Module 2 UI (list, detail, compare, trade modal)
+  auth/          Sign-in screen and session gate
+
+android/         Capacitor Android project (see "Android app")
 ```
 
 Design decisions worth knowing:
@@ -123,7 +179,8 @@ Design decisions worth knowing:
 
 ## Current limits (v1)
 
-- Single-tenant, no authentication — add auth before exposing publicly.
+- Two roles only (owner, member); one workspace per account; no password
+  reset by email.
 - Influencer/campaign metrics come from the deterministic seed generator,
   not live social APIs; money movement is ledger-only.
 - The executor simulates step completion by duration; real integrations

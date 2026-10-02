@@ -3,6 +3,7 @@ import Sidebar, { type Route } from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
 import ComingSoon from "./pages/ComingSoon";
 import { AccountPage, SettingsPage } from "./pages/SimplePages";
+import TeamPage from "./pages/TeamPage";
 import PlanningModule from "./modules/planning/PlanningModule";
 import MarketplaceModule from "./modules/marketplace/MarketplaceModule";
 import { MenuIcon, SparkIcon } from "./components/Icons";
@@ -58,6 +59,7 @@ export default function App() {
           />
         )}
         {route === "settings" && <SettingsPage />}
+        {route === "team" && <TeamPage />}
         {route === "account" && <AccountPage />}
       </main>
     </div>

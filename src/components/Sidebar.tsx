@@ -8,6 +8,7 @@ import {
   WalletIcon,
   WorkflowIcon,
 } from "./Icons";
+import { useSession } from "../auth/AuthGate";
 
 export type Route =
   | "dashboard"
@@ -15,6 +16,7 @@ export type Route =
   | "influencers"
   | "finance"
   | "settings"
+  | "team"
   | "account";
 
 interface SidebarProps {
@@ -40,6 +42,7 @@ const mainNav: NavItem[] = [
 
 const bottomNav: NavItem[] = [
   { route: "settings", label: "Settings", icon: SettingsIcon },
+  { route: "team", label: "Team", icon: UsersIcon },
   { route: "account", label: "Account", icon: UserIcon },
 ];
 
@@ -80,6 +83,9 @@ function NavButton({
 }
 
 export default function Sidebar({ route, onNavigate, mobileOpen, onCloseMobile }: SidebarProps) {
+  // The embedded demo has no accounts, so no team either.
+  const { user } = useSession();
+  const accountNav = bottomNav.filter((item) => item.route !== "team" || user);
   const nav = (target: Route) => {
     onNavigate(target);
     onCloseMobile();
@@ -118,7 +124,7 @@ export default function Sidebar({ route, onNavigate, mobileOpen, onCloseMobile }
       </nav>
 
       <div className="space-y-1 border-t border-white/10 px-3 py-4">
-        {bottomNav.map((item) => (
+        {accountNav.map((item) => (
           <NavButton
             key={item.route}
             item={item}
@@ -127,7 +133,7 @@ export default function Sidebar({ route, onNavigate, mobileOpen, onCloseMobile }
           />
         ))}
         <div className="px-3 pt-3 text-[10px] leading-relaxed text-slate-600">
-          Prototype build · simulated data
+          {user ? user.workspaceName : "Prototype build"} · simulated data
         </div>
       </div>
     </div>

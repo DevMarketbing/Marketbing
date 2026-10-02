@@ -1,4 +1,4 @@
-import { ROOT, jsonFallbackFile } from "../env";
+import { ROOT, authFallbackFile, jsonFallbackFile } from "../env";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline/promises";
@@ -8,14 +8,15 @@ const databaseUrl = process.env.DATABASE_URL?.trim();
 
 if (!databaseUrl) {
   const dbFile = process.env.DB_FILE ?? path.join(ROOT, "data", "marketbing.db");
-  for (const f of [dbFile, `${dbFile}-wal`, `${dbFile}-shm`, jsonFallbackFile(dbFile)]) fs.rmSync(f, { force: true });
+  for (const f of [dbFile, `${dbFile}-wal`, `${dbFile}-shm`, jsonFallbackFile(dbFile), authFallbackFile(dbFile)]) fs.rmSync(f, { force: true });
   console.log("Database cleared - it will be rebuilt from the config/ folder on next start.");
   process.exit(0);
 }
 
 const target = describeTarget(databaseUrl);
 console.log(`This permanently deletes ALL Marketbing data in ${target}`);
-console.log("(trades, runs, alerts, everything). It is rebuilt from the config/ folder on next start.");
+console.log("(every workspace and account, trades, runs, alerts — everything). The default workspace is");
+console.log("rebuilt from the config/ folder on next start; other businesses would have to sign up again.");
 
 let confirmed = process.argv.includes("--yes");
 if (!confirmed) {

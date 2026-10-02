@@ -104,7 +104,7 @@ export function Sparkline({
 export function TierChip({ tier }: { tier: InfluencerProfile["tier"] }) {
   const label = tier === "macro" ? "Macro" : tier === "mid" ? "Mid-tier" : "Micro";
   return (
-    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+    <span className="shrink-0 whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
       {label}
     </span>
   );

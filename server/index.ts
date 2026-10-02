@@ -1,12 +1,23 @@
-import { ROOT, jsonFallbackFile } from "./env";
+import { ROOT, authFallbackFile, jsonFallbackFile } from "./env";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
-import { SqliteStore } from "./sqliteStore";
-import { PgStore } from "./pgStore";
+import { SqliteStores } from "./sqliteStore";
+import { PgStores } from "./pgStore";
+import { JsonStores } from "./jsonStore";
 import { createPool, describeTarget, explainDbError, migrate } from "./db/postgres";
-import { MemoryStore, type DataStore, type MutableState } from "../shared/store";
+import type { DataStore, WorkspaceStores } from "../shared/store";
 import { loadSeedOverrides } from "./config";
+import {
+  createAuth,
+  DEFAULT_WORKSPACE,
+  ensureOwner,
+  JsonAuthStore,
+  PgAuthStore,
+  SqliteAuthStore,
+  type AuthStore,
+  type User,
+} from "./auth";
 import { generateSeed } from "../shared/seed";
 import { analyzeObjective, generatePlans } from "../shared/planner";
 import {
@@ -25,6 +36,18 @@ const PORT = Number(process.env.PORT ?? 8787);
 const DB_FILE = process.env.DB_FILE ?? path.join(ROOT, "data", "marketbing.db");
 const CONFIG_DIR = process.env.CONFIG_DIR ?? path.join(ROOT, "config");
 const DATABASE_URL = process.env.DATABASE_URL?.trim();
+const OWNER_EMAIL = process.env.OWNER_EMAIL?.trim();
+const OWNER_PASSWORD = process.env.OWNER_PASSWORD ?? "";
+const RESET_OWNER_PASSWORD = /^(1|yes|true)$/i.test(process.env.RESET_OWNER_PASSWORD?.trim() ?? "");
+// Anyone may create an account (and a workspace) unless ALLOW_SIGNUP=false.
+const ALLOW_SIGNUP = !/^(0|no|false)$/i.test(process.env.ALLOW_SIGNUP?.trim() ?? "");
+// Web pages allowed to call the API from another origin: the Android app
+// (Capacitor serves it from https://localhost) plus anything in CORS_ORIGINS.
+const CORS_ORIGINS = new Set(
+  ["https://localhost", "http://localhost", "capacitor://localhost", ...(process.env.CORS_ORIGINS ?? "").split(",")]
+    .map((o) => o.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+);
 
 // Editable workspace data (products, influencers, wallet) comes from config/.
 let overrides;
@@ -35,10 +58,11 @@ try {
   process.exit(1);
 }
 
+// Every new workspace starts from this data.
 const seed = generateSeed(undefined, overrides);
-let store: DataStore;
+let stores: WorkspaceStores;
+let authStore: AuthStore;
 let dbLabel: string;
-let seeded: boolean;
 
 if (DATABASE_URL) {
   dbLabel = `Postgres ${describeTarget(DATABASE_URL)}`;
@@ -46,7 +70,8 @@ if (DATABASE_URL) {
     const pool = createPool(DATABASE_URL, process.env.DATABASE_CA_CERT?.trim() || undefined);
     const applied = await migrate(pool);
     if (applied.length) console.log(`Database schema updated: ${applied.join(", ")}`);
-    ({ store, seeded } = await PgStore.open(pool, seed));
+    stores = new PgStores(pool);
+    authStore = new PgAuthStore(pool);
   } catch (e) {
     console.error(`\nCould not connect to the database (${dbLabel}):\n  ${explainDbError(e)}\n`);
     process.exit(1);
@@ -54,30 +79,70 @@ if (DATABASE_URL) {
 } else {
   fs.mkdirSync(path.dirname(DB_FILE), { recursive: true });
   try {
-    const sqlite = new SqliteStore(DB_FILE, seed);
+    stores = new SqliteStores(DB_FILE);
+    authStore = new SqliteAuthStore(DB_FILE);
     dbLabel = `SQLite ${DB_FILE}`;
-    store = sqlite;
-    seeded = !sqlite.wasAlreadySeeded;
   } catch (e) {
     // Runtimes that cannot load native addons (e.g. StackBlitz WebContainers)
-    // can't run better-sqlite3; keep working with a JSON-file-backed store.
+    // can't run better-sqlite3; keep working with JSON-file-backed stores.
     const jsonFile = jsonFallbackFile(DB_FILE);
     console.warn(`\nSQLite is unavailable here (${(e as Error).message.split("\n")[0]}).`);
     console.warn(`Falling back to a JSON file store: ${jsonFile}\n`);
-    let saved: MutableState | undefined;
-    if (fs.existsSync(jsonFile)) saved = JSON.parse(fs.readFileSync(jsonFile, "utf8")) as MutableState;
-    store = new MemoryStore(seed, saved, (state) => fs.writeFileSync(jsonFile, JSON.stringify(state)));
+    stores = new JsonStores(jsonFile, seed);
+    authStore = new JsonAuthStore(authFallbackFile(DB_FILE));
     dbLabel = `JSON ${jsonFile}`;
-    seeded = !saved;
   }
 }
 console.log(
-  seeded
+  (await stores.seedWorkspace(DEFAULT_WORKSPACE, seed))
     ? "Fresh database seeded from the config/ folder."
-    : "Using the existing database — edits to the config/ folder apply after `npm run db:reset`.",
+    : "Using the existing database — edits to the config/ folder apply to new workspaces, or after `npm run db:reset`.",
 );
+let ownerConfigured = false;
+if (OWNER_EMAIL || OWNER_PASSWORD) {
+  try {
+    console.log(
+      await ensureOwner(authStore, OWNER_EMAIL ?? "", OWNER_PASSWORD, { resetPassword: RESET_OWNER_PASSWORD }),
+    );
+    ownerConfigured = true;
+  } catch (e) {
+    console.error(`\nCannot set up sign-in: ${(e as Error).message}\nFix OWNER_EMAIL / OWNER_PASSWORD in .env and start the server again.\n`);
+    process.exit(1);
+  }
+} else {
+  console.warn(
+    "\nOWNER_EMAIL / OWNER_PASSWORD are not set, so nobody can sign in to the default workspace\n" +
+      "(the data from before sign-up existed). See .env.example.\n",
+  );
+}
+const auth = createAuth(authStore, {
+  allowSignup: ALLOW_SIGNUP,
+  ownerConfigured,
+  seedWorkspace: async (workspaceId) => {
+    await stores.seedWorkspace(workspaceId, seed);
+  },
+});
 
 const app = express();
+// Behind a hosting proxy (e.g. Render), TRUST_PROXY=1 makes req.ip the
+// visitor's address, so failed sign-ins are limited per visitor.
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+
+app.use("/api", (req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Max-Age", "600");
+  }
+  res.setHeader("Vary", "Origin");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
 app.use(express.json({ limit: "256kb" }));
 
 /* Minimal request log. */
@@ -93,6 +158,16 @@ const api = express.Router();
 api.get("/health", (_req, res) => {
   res.json({ ok: true, service: "marketbing-api" });
 });
+
+/* Sign-in routes are public; everything registered after this needs a session. */
+api.use(auth.router);
+api.use(auth.requireAuth);
+// Each request only sees the signed-in user's workspace.
+api.use((_req, res, next) => {
+  res.locals.store = stores.forWorkspace((res.locals.user as User).workspaceId);
+  next();
+});
+const storeOf = (res: express.Response) => res.locals.store as DataStore;
 
 /* ---------------------------- Module 1 ---------------------------- */
 
@@ -111,46 +186,46 @@ api.post("/planner/plans", (req, res) => {
 api.post("/runs", async (req, res) => {
   const { objective, kind, planId, context } = req.body ?? {};
   if (!["holistic", "influencer", "email"].includes(kind)) throw new ApiError(400, "Invalid objective kind");
-  res.status(201).json(await createRun(store, { objective, kind, planId, context }, Date.now()));
+  res.status(201).json(await createRun(storeOf(res), { objective, kind, planId, context }, Date.now()));
 });
 
 api.get("/runs/:id", async (req, res) => {
-  res.json(await getRunState(store, req.params.id, Date.now()));
+  res.json(await getRunState(storeOf(res), req.params.id, Date.now()));
 });
 
 api.post("/runs/:id/approval", async (req, res) => {
   const { stepId, action } = req.body ?? {};
   if (!["approve", "reject", "reopen"].includes(action)) throw new ApiError(400, "Invalid approval action");
   if (typeof stepId !== "string") throw new ApiError(400, "stepId is required");
-  res.json(await decideApproval(store, req.params.id, stepId, action, Date.now()));
+  res.json(await decideApproval(storeOf(res), req.params.id, stepId, action, Date.now()));
 });
 
 /* ---------------------------- Module 2 ---------------------------- */
 
 api.get("/marketplace/overview", async (_req, res) => {
-  res.json(await getMarketplaceOverview(store));
+  res.json(await getMarketplaceOverview(storeOf(res)));
 });
 
 api.get("/marketplace/influencers/:id", async (req, res) => {
   const productId = typeof req.query.product === "string" ? req.query.product : "overall";
-  res.json(await getInfluencerDetail(store, req.params.id, productId));
+  res.json(await getInfluencerDetail(storeOf(res), req.params.id, productId));
 });
 
 api.post("/marketplace/influencers/:id/invest", async (req, res) => {
-  res.json(await trade(store, req.params.id, "invest", Number(req.body?.amountLakh), Date.now()));
+  res.json(await trade(storeOf(res), req.params.id, "invest", Number(req.body?.amountLakh), Date.now()));
 });
 
 api.post("/marketplace/influencers/:id/divest", async (req, res) => {
-  res.json(await trade(store, req.params.id, "divest", Number(req.body?.amountLakh), Date.now()));
+  res.json(await trade(storeOf(res), req.params.id, "divest", Number(req.body?.amountLakh), Date.now()));
 });
 
 api.get("/marketplace/compare", async (req, res) => {
   const ids = String(req.query.ids ?? "").split(",").filter(Boolean);
-  res.json(await compareInfluencers(store, ids));
+  res.json(await compareInfluencers(storeOf(res), ids));
 });
 
 api.post("/marketplace/alerts/:id/resolve", async (req, res) => {
-  await resolveAlert(store, req.params.id);
+  await resolveAlert(storeOf(res), req.params.id);
   res.json({ ok: true });
 });
 

@@ -4,7 +4,9 @@
  * Prereqs: `npm run build` and the API server running on :8787
  * (`npm start`), which also serves the built client.
  *
- * Usage: node e2e/smoke.mjs [chromium-executable-path]
+ * Signs in with MB_EMAIL / MB_PASSWORD (the server's OWNER_EMAIL / OWNER_PASSWORD).
+ *
+ * Usage: MB_EMAIL=… MB_PASSWORD=… node e2e/smoke.mjs [chromium-executable-path]
  */
 import { chromium } from "playwright-core";
 
@@ -24,8 +26,25 @@ page.on("console", (m) => {
 const ok = (name) => console.log("OK:", name);
 const vis = (sel) => page.locator(sel).locator("visible=true").first();
 
-/* ---------------- Module 1: plan & execute ---------------- */
+/* ---------------- Sign-in ---------------- */
+if (!process.env.MB_EMAIL || !process.env.MB_PASSWORD) {
+  console.error("Set MB_EMAIL and MB_PASSWORD to the server's OWNER_EMAIL / OWNER_PASSWORD.");
+  process.exit(1);
+}
 await page.goto(BASE);
+await page.fill("#login-email", process.env.MB_EMAIL);
+await page.fill("#login-password", "wrong-password");
+await page.click("button:has-text('Sign in')");
+await page.waitForSelector("text=Wrong email or password");
+ok("wrong password rejected");
+await page.fill("#login-password", process.env.MB_PASSWORD);
+await page.click("button:has-text('Sign in')");
+await page.waitForSelector("text=What do you want to achieve?");
+await page.reload();
+await page.waitForSelector("text=What do you want to achieve?");
+ok("signed in, session survives reload");
+
+/* ---------------- Module 1: plan & execute ---------------- */
 await page.waitForSelector("text=What do you want to achieve?");
 ok("landing loads");
 
@@ -108,6 +127,14 @@ await page.click("button:has-text('Compare (3)')");
 await page.waitForSelector("text=Compare influencers", { timeout: 10000 });
 await vis("text=Attributed sales").waitFor({ timeout: 10000 });
 ok("compare view with 3 influencers");
+
+/* ---------------- Sign-out ---------------- */
+await vis("aside >> text=Account").click();
+await page.click("button:has-text('Sign out')");
+await page.waitForSelector("#login-email");
+await page.reload();
+await page.waitForSelector("#login-email");
+ok("signed out, stays signed out after reload");
 
 if (errors.length) {
   console.log("BROWSER ERRORS:\n" + errors.join("\n"));
