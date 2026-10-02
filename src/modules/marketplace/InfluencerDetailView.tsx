@@ -189,7 +189,7 @@ export default function InfluencerDetailView({
       </div>
 
       {/* Tabs */}
-      <div className="mt-6 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+      <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:flex">
         {(
           [
             ["tasks", `Tasks (${view.tasks.length})`],
@@ -380,7 +380,7 @@ function AlertsTab({ alerts, onResolve }: { alerts: CampaignAlert[]; onResolve: 
     >
       <AlertIcon className={`mt-0.5 h-4.5 w-4.5 shrink-0 ${a.kind === "warning" ? "text-amber-500" : "text-indigo-500"}`} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
+        <div className="flex flex-wrap items-center gap-x-2 text-[10px] font-bold uppercase tracking-widest">
           <span className={a.kind === "warning" ? "text-amber-600" : "text-indigo-600"}>
             {a.kind === "warning" ? "Alert" : "Clarification"}
           </span>

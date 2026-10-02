@@ -57,7 +57,7 @@ export default function MarketplaceList({
             Track every creator like a position — performance, payouts and alerts in one screen.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:gap-3">
           <HeaderStat
             icon={<WalletIcon className="h-4 w-4" />}
             label="Wallet balance"
@@ -207,12 +207,12 @@ export default function MarketplaceList({
             <div className="flex items-center gap-3" onClick={() => onOpen(row.profile.id)}>
               <Avatar profile={row.profile} size={40} />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate font-semibold text-slate-800">{row.profile.name}</span>
+                <div className="truncate font-semibold text-slate-800">{row.profile.name}</div>
+                <div className="mt-0.5 flex items-center gap-1.5">
                   <TierChip tier={row.profile.tier} />
-                </div>
-                <div className="truncate text-xs text-slate-400">
-                  {row.profile.handle} · {fmtCount(row.profile.followers)} · {row.profile.engagementRate}% eng
+                  <span className="truncate text-xs text-slate-400">
+                    {row.profile.handle} · {fmtCount(row.profile.followers)}
+                  </span>
                 </div>
               </div>
               <RoiBadge roi={row.roi} />
@@ -246,14 +246,14 @@ export default function MarketplaceList({
               >
                 Analyse
               </button>
-              <label className="flex items-center gap-1 pl-1 text-[11px] font-medium text-slate-500">
+              <label className="flex flex-col items-center gap-0.5 pl-1 text-[10px] font-medium text-slate-500">
                 <input
                   type="checkbox"
                   checked={compareIds.includes(row.profile.id)}
                   onChange={() => onToggleCompare(row.profile.id)}
                   className="h-4 w-4 accent-indigo-600"
                 />
-                Cmp
+                Compare
               </label>
             </div>
           </div>
@@ -273,8 +273,8 @@ function HeaderStat({
   value: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">
-      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:tracking-widest">
         {icon}
         {label}
       </div>
