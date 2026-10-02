@@ -1,0 +1,101 @@
+# Builds the Android app. The app opens the live site, so this only needs
+# to run when the app shell itself changes (android/, Capacitor config) —
+# not for ordinary site changes, which reach the app on the next deploy.
+#
+# Output:
+# - every run: the test APK as a downloadable artifact on the run's page
+# - the default branch: also published as the "android-latest" release,
+#   whose APK link can be opened straight from a phone
+# - with signing secrets set: a signed .aab bundle for Google Play
+name: Android app
+
+on:
+  push:
+    paths:
+      - "android/**"
+      - "capacitor.config.ts"
+      - "scripts/build-android.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Repository variable; unset means https://marketbing.onrender.com.
+      ANDROID_SITE_URL: ${{ vars.ANDROID_SITE_URL }}
+      VERSION_CODE: ${{ github.run_number }}
+      # A step's own env isn't visible to its `if`, so this lives here.
+      HAS_PLAY_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+
+      - name: Prepare the Android project
+        run: npm run build:android
+
+      - name: Build the test APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "marketbing-${VERSION_CODE}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketbing-apk-${{ github.run_number }}
+          path: marketbing-*.apk
+          if-no-files-found: error
+
+      - name: Publish as the latest release
+        if: github.ref_name == github.event.repository.default_branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          cp "marketbing-${VERSION_CODE}.apk" marketbing.apk
+          gh release create android-latest marketbing.apk \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Android app — build ${VERSION_CODE}" \
+            --notes "Test build ${VERSION_CODE} of the Marketbing Android app. Open this page on your phone and tap marketbing.apk to install. It opens ${ANDROID_SITE_URL:-https://marketbing.onrender.com}, so site updates appear in the app without reinstalling."
+
+      - name: Build the signed Play Store bundle
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        if: env.HAS_PLAY_KEY == 'true'
+        working-directory: android
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/release.keystore" ./gradlew bundleRelease --no-daemon --stacktrace
+          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/marketbing-${VERSION_CODE}.aab"
+
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('marketbing-*.aab') != ''
+        with:
+          name: marketbing-play-bundle-${{ github.run_number }}
+          path: marketbing-*.aab

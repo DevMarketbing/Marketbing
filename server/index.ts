@@ -41,13 +41,6 @@ const OWNER_PASSWORD = process.env.OWNER_PASSWORD ?? "";
 const RESET_OWNER_PASSWORD = /^(1|yes|true)$/i.test(process.env.RESET_OWNER_PASSWORD?.trim() ?? "");
 // Anyone may create an account (and a workspace) unless ALLOW_SIGNUP=false.
 const ALLOW_SIGNUP = !/^(0|no|false)$/i.test(process.env.ALLOW_SIGNUP?.trim() ?? "");
-// Web pages allowed to call the API from another origin: the Android app
-// (Capacitor serves it from https://localhost) plus anything in CORS_ORIGINS.
-const CORS_ORIGINS = new Set(
-  ["https://localhost", "http://localhost", "capacitor://localhost", ...(process.env.CORS_ORIGINS ?? "").split(",")]
-    .map((o) => o.trim().replace(/\/$/, ""))
-    .filter(Boolean),
-);
 
 // Editable workspace data (products, influencers, wallet) comes from config/.
 let overrides;
@@ -128,21 +121,6 @@ const app = express();
 // visitor's address, so failed sign-ins are limited per visitor.
 if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 
-app.use("/api", (req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && CORS_ORIGINS.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Max-Age", "600");
-  }
-  res.setHeader("Vary", "Origin");
-  if (req.method === "OPTIONS") {
-    res.sendStatus(204);
-    return;
-  }
-  next();
-});
 app.use(express.json({ limit: "256kb" }));
 
 /* Minimal request log. */

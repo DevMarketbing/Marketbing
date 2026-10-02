@@ -12,6 +12,7 @@ import AIPlanningState from "./AIPlanningState";
 import PlansView from "./PlansView";
 import PlanDetail from "./PlanDetail";
 import ExecutionView from "./ExecutionView";
+import { BackLevel, useBackLayer } from "../../backButton";
 
 type Stage = "objective" | "context" | "analyzing" | "plans" | "detail" | "executing";
 
@@ -20,7 +21,7 @@ type Stage = "objective" | "context" | "analyzing" | "plans" | "detail" | "execu
  * Stage machine over the planning API: objective → conditional context →
  * AI analysis → plan options → plan detail → server-driven execution run.
  */
-export default function PlanningModule() {
+export default function PlanningModule({ visible }: { visible: boolean }) {
   const [stage, setStage] = useState<Stage>("objective");
   const [objective, setObjective] = useState("");
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
@@ -31,6 +32,18 @@ export default function PlanningModule() {
   const [runId, setRunId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Android back steps through the stages the way each screen's own back link does.
+  const previousStage: Partial<Record<Stage, Stage>> = {
+    context: "objective",
+    analyzing: "context",
+    plans: "context",
+    detail: "plans",
+  };
+  useBackLayer(visible && stage in previousStage, BackLevel.page, () => {
+    const previous = previousStage[stage];
+    if (previous) setStage(previous);
+  });
 
   const fail = (e: unknown) => {
     setError((e as Error).message || "Something went wrong — is the API server running?");

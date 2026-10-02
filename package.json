@@ -17,6 +17,8 @@
     "db:reset": "tsx server/db/reset.ts"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2",
     "better-sqlite3": "^13.0.3",
     "express": "^5.2.1",
     "pg": "^8.23.0",
@@ -27,7 +29,6 @@
   "devDependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
-    "@capacitor/core": "^8.5.2",
     "@tailwindcss/vite": "^4.1.4",
     "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",

@@ -7,10 +7,13 @@ import TeamPage from "./pages/TeamPage";
 import PlanningModule from "./modules/planning/PlanningModule";
 import MarketplaceModule from "./modules/marketplace/MarketplaceModule";
 import { MenuIcon, SparkIcon } from "./components/Icons";
+import { BackLevel, useBackLayer } from "./backButton";
 
 export default function App() {
   const [route, setRoute] = useState<Route>("planning");
   const [mobileOpen, setMobileOpen] = useState(false);
+  useBackLayer(route !== "planning", BackLevel.section, () => setRoute("planning"));
+  useBackLayer(mobileOpen, BackLevel.menu, () => setMobileOpen(false));
 
   return (
     <div className="min-h-screen">
@@ -40,12 +43,12 @@ export default function App() {
         {/* PlanningModule stays mounted so simulated execution keeps running
             while the user visits other sections. */}
         <div className={route === "planning" ? "" : "hidden"}>
-          <PlanningModule />
+          <PlanningModule visible={route === "planning"} />
         </div>
         {route === "dashboard" && <Dashboard onNavigate={setRoute} />}
         {/* Marketplace stays mounted too, preserving list/compare state. */}
         <div className={route === "influencers" ? "" : "hidden"}>
-          <MarketplaceModule />
+          <MarketplaceModule visible={route === "influencers"} />
         </div>
         {route === "finance" && (
           <ComingSoon
