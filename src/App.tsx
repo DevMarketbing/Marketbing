@@ -6,11 +6,14 @@ import { AccountPage, SettingsPage } from "./pages/SimplePages";
 import TeamPage from "./pages/TeamPage";
 import PlanningModule from "./modules/planning/PlanningModule";
 import MarketplaceModule from "./modules/marketplace/MarketplaceModule";
+import MetaModule, { takeMetaReturn } from "./modules/meta/MetaModule";
 import { MenuIcon, SparkIcon } from "./components/Icons";
 import { BackLevel, useBackLayer } from "./backButton";
 
 export default function App() {
-  const [route, setRoute] = useState<Route>("planning");
+  // Coming back from Facebook's sign-in page (#meta=…) opens the Facebook & Instagram section.
+  const [metaReturn] = useState(takeMetaReturn);
+  const [route, setRoute] = useState<Route>(metaReturn ? "meta" : "planning");
   const [mobileOpen, setMobileOpen] = useState(false);
   useBackLayer(route !== "planning", BackLevel.section, () => setRoute("planning"));
   useBackLayer(mobileOpen, BackLevel.menu, () => setMobileOpen(false));
@@ -50,6 +53,7 @@ export default function App() {
         <div className={route === "influencers" ? "" : "hidden"}>
           <MarketplaceModule visible={route === "influencers"} />
         </div>
+        {route === "meta" && <MetaModule returned={metaReturn} />}
         {route === "finance" && (
           <ComingSoon
             title="Finance, Sales & Products"

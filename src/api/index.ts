@@ -8,6 +8,14 @@ import type {
   RunState,
   TradeResult,
 } from "../../shared/types";
+import type {
+  AdsOverview,
+  FbPageOverview,
+  IgLookup,
+  IgMediaDetail,
+  IgOverview,
+  MetaStatus,
+} from "../../shared/metaTypes";
 
 /**
  * Client-side API boundary. The default implementation talks HTTP to the
@@ -200,6 +208,49 @@ export const team = {
   async removeMember(id: string): Promise<void> {
     await request(`/team/members/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
+};
+
+const enc = encodeURIComponent;
+
+/** Facebook & Instagram for the workspace. Not available in the embedded demo, which has no server. */
+export const meta = {
+  available: !EMBEDDED,
+  status: () => request<MetaStatus>("/meta/status"),
+  /** Sends the browser to Meta's "Allow Marketbing to…" page; Meta sends it back here afterwards. */
+  async connect(): Promise<void> {
+    window.location.assign((await post<{ url: string }>("/meta/connect")).url);
+  },
+  async refresh(): Promise<void> {
+    await post("/meta/refresh");
+  },
+  async disconnect(): Promise<void> {
+    await request("/meta/connection", { method: "DELETE" });
+  },
+
+  instagram: (igId: string) => request<IgOverview>(`/meta/instagram/${enc(igId)}`),
+  instagramMedia: (igId: string, mediaId: string) =>
+    request<IgMediaDetail>(`/meta/instagram/${enc(igId)}/media/${enc(mediaId)}`),
+  async replyToComment(igId: string, mediaId: string, commentId: string, message: string): Promise<void> {
+    await post(`/meta/instagram/${enc(igId)}/media/${enc(mediaId)}/comments/${enc(commentId)}/reply`, { message });
+  },
+  async hideComment(igId: string, mediaId: string, commentId: string, hide: boolean): Promise<void> {
+    await post(`/meta/instagram/${enc(igId)}/media/${enc(mediaId)}/comments/${enc(commentId)}/hide`, { hide });
+  },
+  publishInstagram: (igId: string, input: { kind: "image" | "reel"; mediaUrl: string; caption: string }) =>
+    post<{ id: string; permalink?: string }>(`/meta/instagram/${enc(igId)}/publish`, input),
+  lookupInstagram: (igId: string, username: string) =>
+    request<IgLookup>(`/meta/instagram/${enc(igId)}/lookup?username=${enc(username)}`),
+
+  page: (pageId: string) => request<FbPageOverview>(`/meta/pages/${enc(pageId)}`),
+  postToPage: (pageId: string, input: { message: string; link?: string; imageUrl?: string; scheduledAt?: number }) =>
+    post<{ id: string }>(`/meta/pages/${enc(pageId)}/posts`, input),
+
+  ads: (accountId: string) => request<AdsOverview>(`/meta/ads/${enc(accountId)}`),
+  async setCampaignStatus(accountId: string, campaignId: string, status: "ACTIVE" | "PAUSED"): Promise<void> {
+    await post(`/meta/ads/${enc(accountId)}/campaigns/${enc(campaignId)}/status`, { status });
+  },
+  createCampaign: (accountId: string, input: { name: string; objective: string; dailyBudget?: number }) =>
+    post<{ id: string }>(`/meta/ads/${enc(accountId)}/campaigns`, input),
 };
 
 export const api: ApiClient = EMBEDDED

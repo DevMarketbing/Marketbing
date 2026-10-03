@@ -4,7 +4,9 @@
  * Wide tables that scroll inside their own box are fine.
  *
  * Prereqs: same as smoke.mjs. Optional SHOTS=dir saves a screenshot per screen.
- * Signs in with MB_EMAIL / MB_PASSWORD, like smoke.mjs.
+ * Signs in with MB_EMAIL / MB_PASSWORD, like smoke.mjs. With FAKE_META=1 (server
+ * pointed at e2e/fakeMeta.mjs, see e2e/meta.mjs) it also connects Facebook and
+ * checks every Facebook & Instagram tab and dialog.
  * Usage: MB_EMAIL=… MB_PASSWORD=… node e2e/mobile-width.mjs [chromium-executable-path]
  */
 import { chromium } from "playwright-core";
@@ -154,6 +156,43 @@ await page.waitForSelector("#invite-link");
 await check("team");
 await menu("Account");
 await check("account");
+
+await menu("Facebook & Instagram");
+await vis("h1:has-text('Facebook & Instagram')").waitFor();
+await page.waitForSelector("text=Loading your Facebook connection", { state: "detached" });
+await check("meta");
+if (process.env.FAKE_META) {
+  if (await page.locator("button:has-text('Connect Facebook')").count()) {
+    await page.click("button:has-text('Connect Facebook')");
+  }
+  await page.waitForSelector("[data-meta-account]", { timeout: 15000 });
+  await check("meta-connected");
+  await page.click("[role=tab]:has-text('Instagram')");
+  await page.waitForSelector("text=Recent posts");
+  await check("meta-instagram");
+  await page.click("[data-ig-media=m1]");
+  await page.waitForSelector("[role=dialog] >> text=Love this!");
+  await check("meta-instagram-post");
+  await page.click("[role=dialog] button[aria-label=Close]");
+  await page.click("button:has-text('New post')");
+  await check("meta-instagram-new-post");
+  await page.click("[role=dialog] button[aria-label=Close]");
+  await page.click("[role=tab]:has-text('Facebook Pages')");
+  await page.waitForSelector("text=Write a post");
+  await page.check("text=Schedule for later");
+  await check("meta-pages");
+  await page.click("[role=tab]:has-text('Ads')");
+  await page.waitForSelector("[data-campaign]");
+  await check("meta-ads");
+  await page.click("button:has-text('New campaign')");
+  await check("meta-ads-new-campaign");
+  await page.click("[role=dialog] button[aria-label=Close]");
+  await page.click("[role=tab]:has-text('Find influencers')");
+  await page.fill("#ig-lookup", "glowwithmeera");
+  await page.click("button:has-text('Look up')");
+  await page.waitForSelector("text=Engagement rate");
+  await check("meta-lookup");
+}
 
 await browser.close();
 if (problems.length) {

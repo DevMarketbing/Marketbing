@@ -29,3 +29,12 @@ services:
       # Render's proxy sits in front of the app; see TRUST_PROXY in .env.example.
       - key: TRUST_PROXY
         value: "1"
+      # Facebook & Instagram: the Meta app's ID and secret (see .env.example).
+      # Entered in the Render dashboard. PUBLIC_URL isn't needed here: Render
+      # provides RENDER_EXTERNAL_URL, which the server uses instead.
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_LOGIN_CONFIG_ID
+        sync: false

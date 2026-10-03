@@ -1,4 +1,4 @@
-import { ROOT, authFallbackFile, jsonFallbackFile } from "./env";
+import { ROOT, authFallbackFile, jsonFallbackFile, metaFallbackFile } from "./env";
 import express from "express";
 import path from "node:path";
 import fs from "node:fs";
@@ -18,6 +18,9 @@ import {
   type AuthStore,
   type User,
 } from "./auth";
+import { metaConfigFromEnv } from "./meta/graph";
+import { createMeta } from "./meta/routes";
+import { JsonMetaStore, PgMetaStore, SqliteMetaStore, type MetaStore } from "./meta/store";
 import { generateSeed } from "../shared/seed";
 import { analyzeObjective, generatePlans } from "../shared/planner";
 import {
@@ -55,6 +58,7 @@ try {
 const seed = generateSeed(undefined, overrides);
 let stores: WorkspaceStores;
 let authStore: AuthStore;
+let metaStore: MetaStore;
 let dbLabel: string;
 
 if (DATABASE_URL) {
@@ -65,6 +69,7 @@ if (DATABASE_URL) {
     if (applied.length) console.log(`Database schema updated: ${applied.join(", ")}`);
     stores = new PgStores(pool);
     authStore = new PgAuthStore(pool);
+    metaStore = new PgMetaStore(pool);
   } catch (e) {
     console.error(`\nCould not connect to the database (${dbLabel}):\n  ${explainDbError(e)}\n`);
     process.exit(1);
@@ -74,6 +79,7 @@ if (DATABASE_URL) {
   try {
     stores = new SqliteStores(DB_FILE);
     authStore = new SqliteAuthStore(DB_FILE);
+    metaStore = new SqliteMetaStore(DB_FILE);
     dbLabel = `SQLite ${DB_FILE}`;
   } catch (e) {
     // Runtimes that cannot load native addons (e.g. StackBlitz WebContainers)
@@ -83,6 +89,7 @@ if (DATABASE_URL) {
     console.warn(`Falling back to a JSON file store: ${jsonFile}\n`);
     stores = new JsonStores(jsonFile, seed);
     authStore = new JsonAuthStore(authFallbackFile(DB_FILE));
+    metaStore = new JsonMetaStore(metaFallbackFile(DB_FILE));
     dbLabel = `JSON ${jsonFile}`;
   }
 }
@@ -116,6 +123,16 @@ const auth = createAuth(authStore, {
   },
 });
 
+// Facebook & Instagram. Off until META_APP_ID and META_APP_SECRET are set.
+const metaConfig = metaConfigFromEnv(process.env);
+const meta = createMeta({
+  store: metaStore,
+  config: metaConfig,
+  // Render sets RENDER_EXTERNAL_URL; elsewhere the address comes from each request.
+  publicUrl: process.env.PUBLIC_URL?.trim() || process.env.RENDER_EXTERNAL_URL?.trim() || undefined,
+});
+if (!metaConfig) console.log("Facebook & Instagram are off: META_APP_ID / META_APP_SECRET are not set (see .env.example).");
+
 const app = express();
 // Behind a hosting proxy (e.g. Render), TRUST_PROXY=1 makes req.ip the
 // visitor's address, so failed sign-ins are limited per visitor.
@@ -137,9 +154,11 @@ api.get("/health", (_req, res) => {
   res.json({ ok: true, service: "marketbing-api" });
 });
 
-/* Sign-in routes are public; everything registered after this needs a session. */
+/* Sign-in routes and Meta's callbacks are public; everything registered after this needs a session. */
+api.use(meta.publicRouter);
 api.use(auth.router);
 api.use(auth.requireAuth);
+api.use(meta.router);
 // Each request only sees the signed-in user's workspace.
 api.use((_req, res, next) => {
   res.locals.store = stores.forWorkspace((res.locals.user as User).workspaceId);

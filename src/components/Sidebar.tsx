@@ -2,6 +2,7 @@ import {
   CloseIcon,
   DashboardIcon,
   SettingsIcon,
+  SocialIcon,
   SparkIcon,
   UserIcon,
   UsersIcon,
@@ -14,6 +15,7 @@ export type Route =
   | "dashboard"
   | "planning"
   | "influencers"
+  | "meta"
   | "finance"
   | "settings"
   | "team"
@@ -37,6 +39,7 @@ const mainNav: NavItem[] = [
   { route: "dashboard", label: "Dashboard", icon: DashboardIcon },
   { route: "planning", label: "Automatic Planning & Execution", icon: WorkflowIcon },
   { route: "influencers", label: "Influencer Marketplace", icon: UsersIcon },
+  { route: "meta", label: "Facebook & Instagram", icon: SocialIcon },
   { route: "finance", label: "Finance, Sales & Products", icon: WalletIcon, comingSoon: true },
 ];
 

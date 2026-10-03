@@ -201,3 +201,12 @@ export const RupeeIcon = ({ className }: IconProps) => (
     <path d="M7 4h10M7 8.5h10M7 4c5 0 7 1.5 7 4.5S12 13 9 13H7l7 7" />
   </svg>
 );
+
+/** A camera outline: social media (Facebook & Instagram). */
+export const SocialIcon = ({ className }: IconProps) => (
+  <svg {...stroke(className)}>
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="17.3" cy="6.7" r="0.6" fill="currentColor" />
+  </svg>
+);

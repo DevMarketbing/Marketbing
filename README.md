@@ -131,7 +131,77 @@ Working on the shell locally (needs Android Studio): `npm run build:android`
 then `npm run android`. `node scripts/android-images.mjs` regenerates the
 icon and splash images from the logo.
 
-## Adding integrations (Meta, Claude, email, payments)
+## Facebook & Instagram (Meta)
+
+The **Facebook & Instagram** section connects a workspace to Meta. The
+workspace owner clicks **Connect Facebook** once and picks the Pages,
+Instagram accounts and ad accounts to share; then everyone in the workspace
+can:
+
+- **Instagram:** see followers, posts and 28-day reach, views and
+  interactions; open a post's stats and comments; reply to and hide
+  comments; publish a photo or a reel.
+- **Find influencers:** look up any public Instagram business or creator
+  account: followers, posts, average likes and comments, engagement rate.
+- **Facebook Pages:** see followers and recent posts with reactions,
+  comments and shares; post now or schedule up to 30 days ahead, with a link
+  or a picture.
+- **Ads:** last 30 days' spend, reach, clicks, click rate and cost per click
+  for each ad account and campaign; pause or start campaigns (starting asks
+  for confirmation, because it spends money); create new campaigns (always
+  created paused).
+
+Only the owner can connect, reconnect or disconnect. Facebook doesn't allow
+its sign-in inside apps, so the Android app asks people to connect on the
+website; once connected, the app shows everything.
+
+### Setting it up
+
+1. At [developers.facebook.com/apps](https://developers.facebook.com/apps),
+   create an app of type **Business**, and add the products **Facebook
+   Login for Business**, **Instagram** (API with Facebook login) and
+   **Marketing API**.
+2. In the app's **Settings → Basic**, copy the **App ID** and **App secret**
+   into Render's Environment page as `META_APP_ID` and `META_APP_SECRET`
+   (locally: `.env`). Render restarts the app.
+3. In **Facebook Login for Business → Configurations**, create a
+   configuration with token type **User access token**, tick the
+   permissions listed below and the assets (Pages, Instagram accounts, ad
+   accounts), and copy its **Configuration ID** into `META_LOGIN_CONFIG_ID`.
+   (Without it, Marketbing asks for the permissions below directly, which
+   only works with classic Facebook Login.)
+4. Open **Facebook & Instagram** in Marketbing (as the owner). It lists three
+   addresses: put the **redirect URI** under Facebook Login (for Business) →
+   Settings → Valid OAuth Redirect URIs, and the **deauthorize** and **data
+   deletion** addresses where it says. Also fill in the app's Privacy Policy
+   URL in Settings → Basic.
+5. Click **Connect Facebook** and allow everything Facebook asks.
+
+While the Meta app is in **development mode**, only people with a role on the
+app (Settings → App roles) can connect, which is enough to try everything
+with your own accounts. Before other businesses can connect, Meta must
+approve the permissions in **App Review** (and you complete Business
+Verification). Ask for these: `pages_show_list`, `pages_read_engagement`,
+`pages_manage_posts`, `read_insights`, `business_management`,
+`instagram_basic`, `instagram_manage_insights`, `instagram_manage_comments`,
+`instagram_content_publish`, `ads_read`, `ads_management`.
+
+Instagram accounts must be **professional** (business or creator) accounts
+linked to a Facebook Page. Pictures and videos to publish are given as public
+https links, because Meta downloads them from there.
+
+Access tokens are stored encrypted (AES-256-GCM, key derived from
+`META_APP_SECRET`) and signed with `appsecret_proof` on every call. The
+Facebook token lasts about 60 days; the page shows when it expires, and
+**Reconnect** renews it.
+
+### Testing without a Meta app
+
+`e2e/fakeMeta.mjs` stands in for Meta (it approves every sign-in), and
+`e2e/meta.mjs` runs the whole section against it in a browser, including the
+security checks. See the top of `e2e/meta.mjs` for how to start both.
+
+## Adding integrations (Claude, email, payments)
 
 Integrations belong on the server, never in the browser or the app:
 
@@ -161,7 +231,9 @@ shared/          Domain layer — shared by server and browser
 
 server/          Express API
   index.ts       REST routes: /api/auth/*, /api/team/*, /api/planner/*, /api/runs/*,
-                 /api/marketplace/* — each request scoped to the user's workspace
+                 /api/marketplace/*, /api/meta/* — each request scoped to the user's workspace
+  meta/          Facebook & Instagram: Graph API client (appsecret_proof, friendly
+                 errors), sign-in flow, encrypted token storage, Meta's callbacks
   auth.ts        Accounts, workspaces, invites: scrypt password hashes, hashed
                  session and invite tokens (Bearer header), attempt limits
   pgStore.ts / sqliteStore.ts / jsonStore.ts
@@ -175,6 +247,7 @@ src/             React 18 + TypeScript + Tailwind 4 web client
                  localStorage, used for the hosted demo: VITE_EMBEDDED=1)
   modules/planning/     Module 1 UI (objective → context → plans → run)
   modules/marketplace/  Module 2 UI (list, detail, compare, trade modal)
+  modules/meta/  Facebook & Instagram UI (Instagram, Pages, ads, influencer lookup)
   auth/          Sign-in screen and session gate
   backButton.ts  Android back button: closes the top dialog/page/section
 
@@ -203,7 +276,11 @@ Design decisions worth knowing:
 
 - Two roles only (owner, member); one workspace per account; no password
   reset by email.
-- Influencer/campaign metrics come from the deterministic seed generator,
-  not live social APIs; money movement is ledger-only.
+- Marketplace influencer/campaign metrics come from the deterministic seed
+  generator; live Instagram and Meta ads data is in the Facebook & Instagram
+  section. Money movement in the wallet is ledger-only.
+- Facebook & Instagram doesn't yet cover Instagram direct messages, Stories
+  publishing, lead forms or webhooks (live updates); files to publish must
+  already be online (no upload from your computer).
 - The executor simulates step completion by duration; real integrations
   would report completion events into the same engine.

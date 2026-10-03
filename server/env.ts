@@ -17,3 +17,8 @@ export function jsonFallbackFile(dbFile: string): string {
 export function authFallbackFile(dbFile: string): string {
   return dbFile.replace(/\.db$/, "") + ".auth.json";
 }
+
+/** Where Facebook & Instagram connections are kept alongside the JSON fallback store. */
+export function metaFallbackFile(dbFile: string): string {
+  return dbFile.replace(/\.db$/, "") + ".meta.json";
+}
